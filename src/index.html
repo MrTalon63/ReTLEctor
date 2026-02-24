@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 16px;
+			}
+
+			table {
+				border-collapse: collapse;
+				width: 60%;
+			}
+
+			th,
+			td {
+				border: 1px solid #000000;
+				padding: 8px;
+			}
+
+			tr {
+				background-color: #bebebe;
+				text-align: left;
+			}
+
+			tr:first-child {
+				background-color: #3c4258;
+				color: #ffffff;
+			}
+
+			tr:nth-child(even) {
+				background-color: #f9f9f9;
+			}
+
+			code {
+				background-color: #f4f4f4;
+				padding: 2px 4px;
+				border-radius: 4px;
+				font-family: "Courier New", Courier, monospace;
+			}
+		</style>
+		<title>ReTLEctor</title>
+	</head>
+	<body>
+		<h1>Welcome to ReTLEctor</h1>
+		<p>This is a simple web app to cache and return TLEs from Celestrak, so you can avoid getting blocked by their servers when you need to get TLEs for a large number of satellites (Or you testing shit).<br /></p>
+
+		<br />
+
+		<h3>Table below represents the cached TLEs and their URIs: (though most updated list is available at <code>/tle</code> URI)</h3>
+
+		<table>
+			<tr>
+				<th>TLE</th>
+				<th>URI</th>
+			</tr>
+			<tr>
+				<td>All active</td>
+				<td>/tle/allactive</td>
+			</tr>
+			<tr>
+				<td>100 Brightest</td>
+				<td>/tle/visual</td>
+			</tr>
+			<tr>
+				<td>Analyst satellites</td>
+				<td>/tle/analyst</td>
+			</tr>
+			<tr>
+				<td>Cosmos 1408 ASAT test debris</td>
+				<td>/tle/cosmos-1408</td>
+			</tr>
+			<tr>
+				<td>Fengyun-1C ASAT test debris</td>
+				<td>/tle/fengyun-1c-debris</td>
+			</tr>
+			<tr>
+				<td>Iridium 33 collision debris</td>
+				<td>/tle/iridium-33-debris</td>
+			</tr>
+			<tr>
+				<td>Cosmos 2251 collision debris</td>
+				<td>/tle/cosmos-2251-debris</td>
+			</tr>
+			<tr>
+				<td>Weather satellites</td>
+				<td>/tle/weather</td>
+			</tr>
+			<tr>
+				<td>NOAA satellites</td>
+				<td>/tle/noaa</td>
+			</tr>
+			<tr>
+				<td>GOES satellites</td>
+				<td>/tle/goes</td>
+			</tr>
+			<tr>
+				<td>Earth resources satellites</td>
+				<td>/tle/resources</td>
+			</tr>
+			<tr>
+				<td>SARSAT payload satellites</td>
+				<td>/tle/sarsat</td>
+			</tr>
+			<tr>
+				<td>Disaster monitoring satellites</td>
+				<td>/tle/dmc</td>
+			</tr>
+			<tr>
+				<td>TDRSS system</td>
+				<td>/tle/tdrss</td>
+			</tr>
+			<tr>
+				<td>Argos satellites</td>
+				<td>/tle/argos</td>
+			</tr>
+			<tr>
+				<td>Space stations</td>
+				<td>/tle/station</td>
+			</tr>
+			<tr>
+				<td>Geostationary satellites</td>
+				<td>/tle/geo</td>
+			</tr>
+			<tr>
+				<td>GNSS satellites</td>
+				<td>/tle/gnss</td>
+			</tr>
+			<tr>
+				<td>GPS operational satellites</td>
+				<td>/tle/gps-ops</td>
+			</tr>
+			<tr>
+				<td>GLONASS operational satellites</td>
+				<td>/tle/glo-ops</td>
+			</tr>
+			<tr>
+				<td>Galileo satellites</td>
+				<td>/tle/galileo</td>
+			</tr>
+			<tr>
+				<td>BeiDou satellites</td>
+				<td>/tle/beidou</td>
+			</tr>
+			<tr>
+				<td>SBAS satellites</td>
+				<td>/tle/sbas</td>
+			</tr>
+			<tr>
+				<td>Education satellites</td>
+				<td>/tle/education</td>
+			</tr>
+		</table>
+
+		<p>Support for custom NORAD IDs will be added soon-ish.</p>
+		<p>Data is updated every ~4h. The last update time of each group can be found at <code>/tle/&lt;group&gt;/status</code> URIs</p>
+		<p>Current rate limit is 60 requests per minute. That might change in the future, pay attention to the headers returned by the server.</p>
+		<p>Source code is available on <a href="https://github.com/MrTalon63/retlector" target="_blank">GitHub</a>. Feel free to contribute!</p>
+	</body>
+</html>
