@@ -49,7 +49,7 @@ async function limiter(req: Request, server: any) {
 	const ip = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || req.headers.get("true-client-ip") || req.headers.get("x-real-ip") || "unknown";
 	const key = `rate_limit:${ip}`;
 	const now = Date.now();
-	const windowSize = process.env.RATE_LIMIT_WINDOW_MS ? parseInt(process.env.RATE_LIMIT_WINDOW_MS) : 60 * 1000;
+	const windowSize = process.env.RATE_LIMIT_WINDOW ? parseInt(process.env.RATE_LIMIT_WINDOW) * 1000 : 60 * 1000;
 	const maxRequests = process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 60;
 
 	let requestData = await kv.get(key);
@@ -112,7 +112,7 @@ Bun.serve({
 				const timestamp = await kv.get(`${group}_timestamp`);
 				const now = Date.now();
 
-				if (!tleData || !timestamp || now - timestamp > (process.env.CACHE_DURATION_MS ? parseInt(process.env.CACHE_DURATION_MS) : 24 * 60 * 60 * 1000)) {
+				if (!tleData || !timestamp || now - timestamp > (process.env.CACHE_DURATION ? parseInt(process.env.CACHE_DURATION) * 1000 : 24 * 60 * 60 * 1000)) {
 					tleData = await fetchTle(group);
 				} else {
 					log.info(`Serving cached TLEs for group "${group}".`);
