@@ -11,7 +11,7 @@ import log from "./utils/logger";
 new Elysia()
 	// Use HTML plugin for rendering the index page
 	.use(html())
-	.get("/styles.css", () => new Response(Bun.file(new URL("./pub/styles.css", import.meta.url))))
+	.get("/styles.css", () => new Response(Bun.file(new URL("./pub/styles.css", import.meta.url)), { headers: { "Content-Type": "text/css" } }))
 	.get("/", async () => {
 		const activeGroups = [];
 		for (const group of config.allowedGroups) {
