@@ -1,5 +1,3 @@
-import { Html } from "@elysiajs/html";
-
 const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow }: { activeGroups: { name: string; lastUpdate: string }[]; cacheDuration: number; maxReq: number; maxReqWindow: number }) => (
 	<html lang="en">
 		<head>
