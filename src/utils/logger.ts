@@ -1,7 +1,9 @@
 import winston from "winston";
 
+import config from "./config";
+
 const log = winston.createLogger({
-	level: process.env.LOG_LEVEL || "info",
+	level: config.logLevel,
 	format: winston.format.combine(
 		winston.format.timestamp(),
 		winston.format.colorize(),

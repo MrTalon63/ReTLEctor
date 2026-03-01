@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { html } from "@elysiajs/html";
 
 import tleRoute from "./routes/tle";
+import noradRoute from "./routes/norad";
 
 import index from "./pub/index.tsx";
 import kv from "./utils/kv";
@@ -24,6 +25,7 @@ new Elysia()
 
 	// Subroutes registers
 	.use(tleRoute) // Import TLE routes
+	.use(noradRoute) // Import NORAD routes
 
 	.listen(config.port, () => {
 		log.info(`Server is running on port ${config.port}`);

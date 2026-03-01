@@ -11,7 +11,7 @@ async function fetchTle(group: string) {
 		const response = await fetch(url, {
 			headers: {
 				"If-Modified-Since": lastFetch ? new Date(lastFetch).toUTCString() : "",
-				"User-Agent": `ReTLEctor/${version} (https://github.com/MrTalon63/retlector)`,
+				"User-Agent": `ReTLEctor/${version} (https://github.com/MrTalon63/ReTLEctor)`,
 			},
 		});
 		if (!response.ok) {
