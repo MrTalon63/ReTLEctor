@@ -3,6 +3,20 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow }: { activeGr
 		<head>
 			<meta charset="UTF-8" />
 			<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+			<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+			<meta name="description" content="Celestrak TLE caching server" />
+			<meta name="keywords" content="TLE, Celestrak, satellite, cache, satrx" />
+			<meta name="author" content="MrTalon63" />
+			<meta name="theme-color" content="#3c4258" />
+			<meta property="og:title" content="ReTLEctor" />
+			<meta property="og:description" content="Celestrak TLE caching server" />
+			<meta property="og:type" content="website" />
+			<meta name="twitter:card" content="summary" />
+			<meta name="twitter:title" content="ReTLEctor" />
+			<meta name="twitter:description" content="Celestrak TLE caching server" />
+			<meta name="robots" content="index, follow" />
+			<link rel="canonical" href="https://retlector.eu" />
+			<link rel="icon" href="/favicon.ico" type="image/x-icon" />
 			<title>ReTLEctor</title>
 			<link rel="stylesheet" href="/styles.css" />
 		</head>
