@@ -10,6 +10,7 @@ import index from "./pub/index.tsx";
 import kv from "./utils/kv";
 import config from "./utils/config";
 import log from "./utils/logger";
+import { version } from "../package.json";
 
 new Elysia()
 	.use(wrap(log))
@@ -27,7 +28,7 @@ new Elysia()
 			const lastUpdateJson = jsonTimestamp ? new Date(jsonTimestamp).toISOString() : "Never";
 			activeGroups.push({ name: group, lastUpdateTle, lastUpdateJson });
 		}
-		return index({ activeGroups, cacheDuration: config.cacheDuration, maxReq: config.rateLimitMaxRequests, maxReqWindow: config.rateLimitWindow });
+		return index({ activeGroups, cacheDuration: config.cacheDuration, maxReq: config.rateLimitMaxRequests, maxReqWindow: config.rateLimitWindow, version });
 	})
 
 	// Subroutes registers

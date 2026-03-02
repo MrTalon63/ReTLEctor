@@ -1,4 +1,4 @@
-const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow }: { activeGroups: { name: string; lastUpdateTle: string; lastUpdateJson: string }[]; cacheDuration: number; maxReq: number; maxReqWindow: number }) => (
+const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow, version }: { activeGroups: { name: string; lastUpdateTle: string; lastUpdateJson: string }[]; cacheDuration: number; maxReq: number; maxReqWindow: number; version: string }) => (
 	<html lang="en">
 		<head>
 			<meta charset="UTF-8" />
@@ -30,7 +30,7 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow }: { activeGr
 			</p>
 
 			<p>
-				Custom NORAD ID requests are supported via <code>/norad/[NORAD_ID]</code>.<br></br>
+				Custom NORAD ID requests are supported via <code>/norad/[NORAD_ID]</code>.<br />
 				Please note that this is very experimental and currently only in <strong>3LE</strong> format.
 			</p>
 
@@ -62,6 +62,7 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow }: { activeGr
 				</a>
 				. Feel free to contribute!
 			</p>
+			<p>ReTLEctor version: {version}</p>
 		</body>
 	</html>
 );
