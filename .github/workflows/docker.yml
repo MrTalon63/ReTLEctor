@@ -2,7 +2,7 @@ name: Docker Image CI
 
 on:
     push:
-        branches: ["master"]
+        branches: ["**"]
     pull_request:
         branches: ["master"]
     workflow_dispatch:
@@ -11,6 +11,11 @@ jobs:
     docker-build:
         runs-on: ubuntu-latest
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
             - name: Login to ghcr.io
               uses: docker/login-action@v3
               with:
@@ -27,7 +32,20 @@ jobs:
             - name: lowercase github.repository
               run: echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
 
-            - name: Build and push
+            - name: Determine version tag
+              id: version
+              run: |
+                  VERSION=$(jq -r '.version' package.json)
+                  GIT_TAG=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "")
+                  if [ -z "$GIT_TAG" ]; then
+                    VERSION_TAG="${VERSION}-dirty"
+                  else
+                    VERSION_TAG="${VERSION}"
+                  fi
+                  echo "version_tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+
+            - name: Build and push (master)
+              if: github.ref == 'refs/heads/master'
               uses: docker/build-push-action@v6
               with:
                   file: Dockerfile
@@ -35,4 +53,14 @@ jobs:
                   platforms: linux/amd64,linux/arm64
                   tags: |
                       ghcr.io/${{ env.IMAGE_NAME }}:latest
-                      ghcr.io/${{ env.IMAGE_NAME }}:${{ github.RUN_ID }}
+                      ghcr.io/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version_tag }}
+
+            - name: Build and push (nightly)
+              if: github.ref != 'refs/heads/master'
+              uses: docker/build-push-action@v6
+              with:
+                  file: Dockerfile
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ghcr.io/${{ env.IMAGE_NAME }}:nightly-${{ github.sha }}
