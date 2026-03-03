@@ -3,11 +3,14 @@ import config from "./config";
 import log from "./logger";
 import tleFetcher from "./tleFetcher";
 
+const SPECIAL_GROUPS = ["gpz", "gpz-plus", "decaying"];
+
 async function handleGroupRequest(group: string, lastFetchedHeader: number, format: "tle" | "json" | "csv") {
 	if (config.allowedGroups.includes(group) === false) {
 		return new Response(`Group "${group}" is not allowed.`, { status: 403 });
 	}
 
+	const queryType = SPECIAL_GROUPS.includes(group) ? "SPECIAL" : "GROUP";
 	let timestamp = await kv.get(`${group}_timestamp_${format}`);
 	const now = Date.now();
 	const staleDuration = group === "active" ? config.cacheActiveDuration : config.cacheDuration;
@@ -22,13 +25,13 @@ async function handleGroupRequest(group: string, lastFetchedHeader: number, form
 
 	if (!tle) {
 		log.debug(`No cached GP data for group "${group}", format "${format}". Fetching from Celestrak...`);
-		tle = await tleFetcher(group, format);
+		tle = await tleFetcher(group, format, queryType);
 		timestamp = now;
 		await kv.set(`${group}_${format}`, tle);
 		await kv.set(`${group}_timestamp_${format}`, timestamp);
 	} else if (isStale) {
 		log.debug(`GP data for group "${group}", format "${format}" are stale. Fetching fresh TLEs...`);
-		tle = await tleFetcher(group, format);
+		tle = await tleFetcher(group, format, queryType);
 		timestamp = now;
 		await kv.set(`${group}_${format}`, tle);
 		await kv.set(`${group}_timestamp_${format}`, timestamp);

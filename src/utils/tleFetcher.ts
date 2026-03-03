@@ -3,8 +3,8 @@ import kv from "./kv";
 
 import { version } from "../../package.json";
 
-async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle"): Promise<string> {
-	const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=${format}`;
+async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", queryType: string = "GROUP"): Promise<string> {
+	const url = `https://celestrak.org/NORAD/elements/gp.php?${queryType}=${group}&FORMAT=${format}`;
 	log.debug(`Fetching TLEs for group "${group}", format "${format}" from Celestrak...`);
 	try {
 		const lastFetch = await kv.get(`${group}_timestamp_${format}`);
