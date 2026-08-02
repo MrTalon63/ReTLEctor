@@ -11,6 +11,7 @@ import index from "./pub/index.tsx";
 import kv from "./utils/kv";
 import config from "./utils/config";
 import log from "./utils/logger";
+import { startTleCron } from "./utils/tleCron";
 import { version } from "../package.json";
 
 const FORMATS: Array<"tle" | "json" | "csv"> = ["tle", "json", "csv"];
@@ -55,14 +56,15 @@ async function validateKvOnBootup(): Promise<void> {
 }
 
 await validateKvOnBootup();
+startTleCron();
 
 new Elysia()
 	.use(wrap(log))
 	// Use HTML plugin for rendering the index page
 	.use(html())
-	.get("/styles.css", () => new Response(Bun.file(new URL("./pub/styles.css", import.meta.url)), { headers: { "Content-Type": "text/css", "Cache-Control": "public, max-age=31536000" } }))
-	.get("/favicon.ico", () => new Response(Bun.file(new URL("./pub/favicon.ico", import.meta.url)), { headers: { "Content-Type": "image/x-icon", "Cache-Control": "public, max-age=31536000" } }))
-	.get("/retlector.png", () => new Response(Bun.file(new URL("./pub/retlector.png", import.meta.url)), { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=31536000" } }))
+	.get("/styles.css", () => new Response(Bun.file(new URL("./pub/styles.css", import.meta.url)), { headers: { "Content-Type": "text/css", "Cache-Control": "public, max-age=86400" } }))
+	.get("/favicon.ico", () => new Response(Bun.file(new URL("./pub/favicon.ico", import.meta.url)), { headers: { "Content-Type": "image/x-icon", "Cache-Control": "public, max-age=86400" } }))
+	.get("/retlector.png", () => new Response(Bun.file(new URL("./pub/retlector.png", import.meta.url)), { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } }))
 	.get("/", async () => {
 		const activeGroups = [];
 		for (const group of config.allowedGroups) {
