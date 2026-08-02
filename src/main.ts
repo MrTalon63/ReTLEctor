@@ -13,6 +13,7 @@ import config from "./utils/config";
 import log from "./utils/logger";
 import { startTleCron } from "./utils/tleCron";
 import { isCorruptTleValue } from "./utils/tleFetcher";
+import { getTleFreshnessStatus } from "./utils/tleStatus";
 import { version } from "../package.json";
 
 async function validateKvOnBootup(): Promise<void> {
@@ -56,6 +57,7 @@ new Elysia()
 	.get("/favicon.ico", () => new Response(Bun.file(new URL("./pub/favicon.ico", import.meta.url)), { headers: { ...staticHeaders, "Content-Type": "image/x-icon" } }))
 	.get("/retlector.png", () => new Response(Bun.file(new URL("./pub/retlector.png", import.meta.url)), { headers: { ...staticHeaders, "Content-Type": "image/png" } }))
 	.get("/", async () => {
+		const now = Date.now();
 		const activeGroups = await Promise.all(
 			config.allowedGroups.map(async (group) => {
 				const [tleTimestamp, jsonTimestamp, csvTimestamp] = await Promise.all([
@@ -63,10 +65,18 @@ new Elysia()
 					kv.get(`${group}_timestamp_json`),
 					kv.get(`${group}_timestamp_csv`),
 				]);
-				const lastUpdateTle = tleTimestamp ? new Date(tleTimestamp).toISOString() : "Never";
-				const lastUpdateJson = jsonTimestamp ? new Date(jsonTimestamp).toISOString() : "Never";
-				const lastUpdateCsv = csvTimestamp ? new Date(csvTimestamp).toISOString() : "Never";
-				return { name: group, lastUpdateTle, lastUpdateJson, lastUpdateCsv };
+				const tleStatus = getTleFreshnessStatus(tleTimestamp as string | number | null, group, now);
+				const jsonStatus = getTleFreshnessStatus(jsonTimestamp as string | number | null, group, now);
+				const csvStatus = getTleFreshnessStatus(csvTimestamp as string | number | null, group, now);
+				return {
+					name: group,
+					lastUpdateTle: tleStatus.isoDate,
+					lastUpdateJson: jsonStatus.isoDate,
+					lastUpdateCsv: csvStatus.isoDate,
+					tleStatus,
+					jsonStatus,
+					csvStatus,
+				};
 			})
 		);
 		return index({

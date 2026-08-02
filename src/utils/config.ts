@@ -25,6 +25,7 @@ const config = {
 			: parseInt(process.env.MAX_STORAGE_AGE) * 1000
 		: 14 * 24 * 60 * 60 * 1000,
 	cronInterval: process.env.CRON_INTERVAL ? parseInt(process.env.CRON_INTERVAL) * 1000 : 60 * 60 * 1000,
+	cronJitter: process.env.CRON_JITTER ? parseInt(process.env.CRON_JITTER) * 1000 : 15 * 60 * 1000,
 	celestrakUrl: process.env.CELESTRAK_URL || "https://celestrak.org/NORAD/elements/gp.php",
 	celestrakMaxDirectRequests: process.env.CELESTRAK_MAX_DIRECT_REQUESTS ? parseInt(process.env.CELESTRAK_MAX_DIRECT_REQUESTS) : 25,
 	siteUrl: process.env.SITE_URL || "",

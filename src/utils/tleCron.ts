@@ -3,6 +3,11 @@ import config from "./config";
 import log from "./logger";
 import fetchTle from "./tleFetcher";
 
+export function getRandomJitter(maxJitterMs: number): number {
+	if (maxJitterMs <= 0) return 0;
+	return Math.floor(Math.random() * maxJitterMs);
+}
+
 async function checkAndUpdateTles(): Promise<void> {
 	log.debug("Running scheduled TLE update check...");
 	const now = Date.now();
@@ -23,22 +28,37 @@ async function checkAndUpdateTles(): Promise<void> {
 				} catch (err) {
 					log.error(`Background cron failed to update group "${group}" format "${format}": ${err}`);
 				}
+				// Stagger sequential fetches with a 1-3s random delay to avoid bursting Celestrak
+				const interFetchDelay = 1000 + Math.floor(Math.random() * 2000);
+				await new Promise((resolve) => setTimeout(resolve, interFetchDelay));
 			}
 		}
 	}
 }
 
+function scheduleNextCheck(): void {
+	const jitterMs = getRandomJitter(config.cronJitter);
+	const nextDelayMs = config.cronInterval + jitterMs;
+	log.debug(`Next TLE cron update check in ${(nextDelayMs / 1000).toFixed(0)}s (including ${(jitterMs / 1000).toFixed(0)}s random jitter).`);
+
+	setTimeout(async () => {
+		try {
+			await checkAndUpdateTles();
+		} catch (err) {
+			log.error(`Periodic TLE background check error: ${err}`);
+		} finally {
+			scheduleNextCheck();
+		}
+	}, nextDelayMs);
+}
+
 export function startTleCron(): void {
 	const maxAgeDays = (config.maxStorageAge / (24 * 60 * 60 * 1000)).toFixed(1);
-	log.info(`Starting TLE background updater (interval: ${config.cronInterval / 1000}s, max age: ${maxAgeDays} days).`);
+	log.info(`Starting TLE background updater (interval: ${config.cronInterval / 1000}s, max jitter: ${config.cronJitter / 1000}s, max age: ${maxAgeDays} days).`);
 
 	checkAndUpdateTles().catch((err) => {
 		log.error(`Initial TLE background check error: ${err}`);
 	});
 
-	setInterval(() => {
-		checkAndUpdateTles().catch((err) => {
-			log.error(`Periodic TLE background check error: ${err}`);
-		});
-	}, config.cronInterval);
+	scheduleNextCheck();
 }

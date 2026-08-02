@@ -1,4 +1,25 @@
 import config from "../utils/config";
+import type { TleStatusInfo } from "../utils/tleStatus";
+
+interface ActiveGroup {
+	name: string;
+	lastUpdateTle: string;
+	lastUpdateJson: string;
+	lastUpdateCsv: string;
+	tleStatus?: TleStatusInfo;
+	jsonStatus?: TleStatusInfo;
+	csvStatus?: TleStatusInfo;
+}
+
+const renderBadge = (info?: TleStatusInfo, fallbackText?: string) => {
+	if (!info) return <span>{fallbackText || "Never"}</span>;
+	return (
+		<span class={`status-badge badge-${info.status}`} title={info.isoDate !== "Never" ? `Updated: ${info.isoDate}` : "Never cached"}>
+			<span class="status-dot"></span>
+			<span class="badge-label">{info.label}</span>
+		</span>
+	);
+};
 
 const index = ({
 	activeGroups,
@@ -10,7 +31,7 @@ const index = ({
 	githubUrl = config.githubUrl,
 	appName = config.appName,
 }: {
-	activeGroups: { name: string; lastUpdateTle: string; lastUpdateJson: string; lastUpdateCsv: string }[];
+	activeGroups: ActiveGroup[];
 	cacheDuration: number;
 	maxReq: number;
 	maxReqWindow: number;
@@ -56,7 +77,10 @@ const index = ({
 			<main>
 				<div class="card">
 					<h2>About</h2>
-					<p>A lightweight proxy that caches TLEs from Celestrak to prevent rate-limiting when fetching a lot of data.</p>
+					<p>
+						A lightweight proxy that caches TLEs from
+						<a href="https://celestrak.org/">Celestrak</a> to prevent rate-limiting when fetching a lot of data.
+					</p>
 					<p>
 						Supported formats: <br />
 						<strong>3LE</strong> - <code>/tle/[group]</code> <br />
@@ -69,7 +93,15 @@ const index = ({
 				</div>
 
 				<div class="card table-card">
-					<h2>Cached Groups</h2>
+					<div class="table-header">
+						<h2>Cached Groups</h2>
+						<div class="status-legend" title="Freshness indicators based on update threshold (6h for active, 24h for rest)">
+							<span class="legend-item"><span class="status-dot dot-fresh"></span> Fresh</span>
+							<span class="legend-item"><span class="status-dot dot-stale"></span> Stale</span>
+							<span class="legend-item"><span class="status-dot dot-expired"></span> Expired</span>
+							<span class="legend-item"><span class="status-dot dot-never"></span> Never</span>
+						</div>
+					</div>
 					<div class="table-wrap">
 						<table>
 							<thead>
@@ -86,9 +118,9 @@ const index = ({
 										<td data-label="Group">
 											<code>{group.name}</code>
 										</td>
-										<td data-label="Last Update (TLE)">{group.lastUpdateTle}</td>
-										<td data-label="Last Update (JSON)">{group.lastUpdateJson}</td>
-										<td data-label="Last Update (CSV)">{group.lastUpdateCsv}</td>
+										<td data-label="Last Update (TLE)">{renderBadge(group.tleStatus, group.lastUpdateTle)}</td>
+										<td data-label="Last Update (JSON)">{renderBadge(group.jsonStatus, group.lastUpdateJson)}</td>
+										<td data-label="Last Update (CSV)">{renderBadge(group.csvStatus, group.lastUpdateCsv)}</td>
 									</tr>
 								))}
 							</tbody>
