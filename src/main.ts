@@ -13,6 +13,49 @@ import config from "./utils/config";
 import log from "./utils/logger";
 import { version } from "../package.json";
 
+const FORMATS: Array<"tle" | "json" | "csv"> = ["tle", "json", "csv"];
+
+function isCorruptTleValue(value: string | null | undefined): boolean {
+	if (!value || value.trim().length === 0) return true;
+	const trimmed = value.trim();
+	// HTML error pages
+	if (trimmed.startsWith("<") || trimmed.toLowerCase().startsWith("<!doctype")) return true;
+	// Celestrak plain-text error messages
+	if (trimmed.toLowerCase().startsWith("no gp data")) return true;
+	if (trimmed.toLowerCase().includes("error") && trimmed.length < 200) return true;
+	return false;
+}
+
+async function validateKvOnBootup(): Promise<void> {
+	log.info("Validating KV store entries on bootup...");
+	let purged = 0;
+
+	for (const group of config.allowedGroups) {
+		for (const format of FORMATS) {
+			const dataKey = `${group}_${format}`;
+			const tsKey = `${group}_timestamp_${format}`;
+			const value = (await kv.get(dataKey)) as string | null;
+
+			if (isCorruptTleValue(value)) {
+				if (value !== null && value !== undefined) {
+					log.warn(`KV entry "${dataKey}" looks corrupt — purging (length=${value?.length ?? 0}, preview="${value?.slice(0, 60).replace(/\n/g, "\\n")}")`);
+					await kv.delete(dataKey);
+					await kv.delete(tsKey);
+					purged++;
+				}
+			}
+		}
+	}
+
+	if (purged > 0) {
+		log.warn(`KV validation complete. Purged ${purged} corrupt entr${purged === 1 ? "y" : "ies"}.`);
+	} else {
+		log.info("KV validation complete. No corrupt entries found.");
+	}
+}
+
+await validateKvOnBootup();
+
 new Elysia()
 	.use(wrap(log))
 	// Use HTML plugin for rendering the index page
