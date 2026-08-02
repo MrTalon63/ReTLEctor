@@ -12,20 +12,47 @@ async function getObjectsTle(noradId: number): Promise<string> {
 	const now = Date.now();
 	const isStale = timestamp ? now - timestamp > config.cacheNoradDuration : true;
 
-	// Only re-parse the active group if we have no data at all (or it's stale and not cached per-ID)
+	// Only re-parse or re-fetch active group if per-ID cache is missing or stale
 	if (!tleData || isStale) {
 		let allTles = (await kv.get("active_tle")) as string | null;
-		if (!allTles) {
-			// fetchTle falls back to stale cache internally — if it throws, no active TLEs at all
-			await fetchTle("active");
+		const activeTimestamp: number | undefined = await kv.get("active_timestamp_tle");
+		const activeIsStale = activeTimestamp ? now - activeTimestamp > config.cacheActiveDuration : true;
+
+		if (!allTles || activeIsStale) {
+			// Active group is missing or stale — fetch fresh data and re-cache all satellites
+			try {
+				await fetchTle("active");
+			} catch (err) {
+				log.warn(`Failed to fetch active TLE group: ${err}`);
+			}
 			allTles = (await kv.get("active_tle")) as string | null;
-		}
 
-		if (allTles) {
+			if (allTles) {
+				const lines = allTles.split("\n");
+				const setPromises: Promise<boolean>[] = [];
+				for (let i = 0; i < lines.length; i += 3) {
+					const idLine = lines[i + 0];
+					const tleLine1 = lines[i + 1];
+					const tleLine2 = lines[i + 2];
+
+					if (idLine && tleLine1 && tleLine2) {
+						const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
+						const tleString = `${idLine}\n${tleLine1}\n${tleLine2}`;
+						if (parsed.number === noradId) {
+							tleData = tleString;
+						}
+						setPromises.push(kv.set(`tle_${parsed.number}`, tleString));
+						setPromises.push(kv.set(`tle_${parsed.number}_timestamp`, now));
+					}
+				}
+				await Promise.all(setPromises);
+			} else {
+				log.error("No active TLEs available (fetch failed and no cache). Falling back to per-ID cache.");
+			}
+		} else {
+			// Active group is still fresh — just scan for the requested satellite without re-writing everything
+			log.debug(`Active TLE group is fresh. Scanning for NORAD ID ${noradId} without re-caching all satellites.`);
 			const lines = allTles.split("\n");
-			const setPromises: Promise<boolean>[] = [];
-			const newTimestamp = Date.now();
-
 			for (let i = 0; i < lines.length; i += 3) {
 				const idLine = lines[i + 0];
 				const tleLine1 = lines[i + 1];
@@ -33,17 +60,14 @@ async function getObjectsTle(noradId: number): Promise<string> {
 
 				if (idLine && tleLine1 && tleLine2) {
 					const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
-					const tleString = `${idLine}\n${tleLine1}\n${tleLine2}`;
 					if (parsed.number === noradId) {
-						tleData = tleString;
+						tleData = `${idLine}\n${tleLine1}\n${tleLine2}`;
+						await kv.set(`tle_${noradId}`, tleData);
+						await kv.set(`tle_${noradId}_timestamp`, now);
+						break;
 					}
-					setPromises.push(kv.set(`tle_${parsed.number}`, tleString));
-					setPromises.push(kv.set(`tle_${parsed.number}_timestamp`, newTimestamp));
 				}
 			}
-			await Promise.all(setPromises);
-		} else {
-			log.error("No active TLEs available (fetch failed and no cache). Falling back to per-ID cache.");
 		}
 	}
 
@@ -73,7 +97,6 @@ async function getObjectsTle(noradId: number): Promise<string> {
 			}
 
 			const response = await fetch(url, {
-				// Celestrak doesn't support If-Modified-Since or ETag headers, so we have to implement our own rate limiting and caching mechanism to avoid getting blocked
 				headers: {
 					"User-Agent": `ReTLEctor/${version} (https://github.com/MrTalon63/ReTLEctor)`,
 				},

@@ -2,13 +2,14 @@ import { Elysia } from "elysia";
 
 import kv from "./kv";
 import log from "./logger";
+import config from "./config";
 
 const limiter = new Elysia({ name: "rate-limiter" }).onRequest(async (ctx) => {
 	const ip = ctx.request.headers.get("x-forwarded-for") || ctx.request.headers.get("cf-connecting-ip") || ctx.request.headers.get("true-client-ip") || ctx.request.headers.get("x-real-ip") || "unknown";
 	const key = `rate_limit:${ip}`;
 	const now = Date.now();
-	const windowSize = process.env.RATE_LIMIT_WINDOW ? parseInt(process.env.RATE_LIMIT_WINDOW) * 1000 : 60 * 1000;
-	const maxRequests = process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 60;
+	const windowSize = config.rateLimitWindow;
+	const maxRequests = config.rateLimitMaxRequests;
 
 	let clientInfo = await kv.get(key);
 	if (!clientInfo) {

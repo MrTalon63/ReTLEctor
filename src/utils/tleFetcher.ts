@@ -3,8 +3,8 @@ import kv from "./kv";
 
 import { version } from "../../package.json";
 
-async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle"): Promise<string> {
-	const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=${format}`;
+async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", queryType: string = "GROUP"): Promise<string> {
+	const url = `https://celestrak.org/NORAD/elements/gp.php?${queryType}=${group}&FORMAT=${format}`;
 	log.debug(`Fetching TLEs for group "${group}", format "${format}" from Celestrak...`);
 
 	const cachedData = (await kv.get(`${group}_${format}`)) as string | null;
@@ -21,10 +21,8 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle"): 
 		if (response.status === 304) {
 			log.debug(`TLEs for group "${group}", format "${format}" not modified (304). Serving cached data.`);
 			if (cachedData) return cachedData;
-			// 304 with no cache is unexpected — fall through to throw
 			throw new Error(`Got 304 but no cached data for group "${group}", format "${format}"`);
 		}
-
 		if (!response.ok) {
 			log.child({ status: response.status, statusText: response.statusText })
 				.error(`Upstream returned ${response.status} for group "${group}", format "${format}". Will serve cached data if available.`);
@@ -37,6 +35,7 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle"): 
 		}
 
 		const tleData = await response.text();
+
 		await kv.set(`${group}_${format}`, tleData);
 		await kv.set(`${group}_timestamp_${format}`, Date.now());
 		log.debug(`Successfully cached TLEs for group "${group}" in format "${format}".`);
