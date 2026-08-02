@@ -11,6 +11,12 @@ const config = {
 	cacheDuration: process.env.CACHE_DURATION ? parseInt(process.env.CACHE_DURATION) * 1000 : 24 * 60 * 60 * 1000,
 	cacheActiveDuration: process.env.CACHE_ACTIVE_DURATION ? parseInt(process.env.CACHE_ACTIVE_DURATION) * 1000 : 2 * 60 * 60 * 1000,
 	cacheNoradDuration: process.env.CACHE_NORAD_DURATION ? parseInt(process.env.CACHE_NORAD_DURATION) * 1000 : 24 * 60 * 60 * 1000,
+	maxStorageAge: process.env.MAX_STORAGE_AGE
+		? parseInt(process.env.MAX_STORAGE_AGE) < 365
+			? parseInt(process.env.MAX_STORAGE_AGE) * 24 * 60 * 60 * 1000
+			: parseInt(process.env.MAX_STORAGE_AGE) * 1000
+		: 14 * 24 * 60 * 60 * 1000,
+	cronInterval: process.env.CRON_INTERVAL ? parseInt(process.env.CRON_INTERVAL) * 1000 : 60 * 60 * 1000,
 };
 
 export default config;

@@ -26,23 +26,24 @@ async function handleGroupRequest(group: string, lastFetchedHeader: number, form
 	if (!tle) {
 		log.debug(`No cached GP data for group "${group}", format "${format}". Fetching from Celestrak...`);
 		tle = await tleFetcher(group, format, queryType);
-		timestamp = now;
-		await kv.set(`${group}_${format}`, tle);
-		await kv.set(`${group}_timestamp_${format}`, timestamp);
+		timestamp = ((await kv.get(`${group}_timestamp_${format}`)) as number | null) ?? now;
 	} else if (isStale) {
 		log.debug(`GP data for group "${group}", format "${format}" are stale. Fetching fresh TLEs...`);
 		tle = await tleFetcher(group, format, queryType);
-		timestamp = now;
-		await kv.set(`${group}_${format}`, tle);
-		await kv.set(`${group}_timestamp_${format}`, timestamp);
+		timestamp = ((await kv.get(`${group}_timestamp_${format}`)) as number | null) ?? timestamp;
 	} else {
 		log.debug(`Serving cached GP data for group "${group}", format "${format}".`);
 	}
 
 	const contentType = format === "json" ? "application/json" : "text/plain";
 
+	const age = timestamp ? now - timestamp : 0;
+	const maxAge = Math.max(0, group === "active"
+		? Math.ceil((config.cacheActiveDuration - age) / 1000)
+		: Math.ceil((config.cacheDuration - age) / 1000));
+
 	return new Response(tle, {
-		headers: { "Content-Type": contentType, "Last-Modified": new Date(timestamp).toUTCString(), "Cache-Control": `max-age=${group === "active" ? Math.ceil((config.cacheActiveDuration - (now - timestamp)) / 1000) : Math.ceil((config.cacheDuration - (now - timestamp)) / 1000)}` },
+		headers: { "Content-Type": contentType, "Last-Modified": new Date(timestamp).toUTCString(), "Cache-Control": `max-age=${maxAge}` },
 	});
 }
 

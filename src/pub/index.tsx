@@ -41,7 +41,7 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow, version }: {
 						Supported formats: <br />
 						<strong>3LE</strong> - <code>/tle/[group]</code> <br />
 						<strong>JSON CCSDS OMM</strong> - <code>/json/[group]</code> <br />
-						<strong>CSV</strong> - <code>/csv/[group]</code>
+						<strong>CSV CCSDS OMM</strong> - <code>/csv/[group]</code>
 					</p>
 					<p>
 						Custom NORAD ID lookup (experimental, 3LE only): <code>/norad/[NORAD_ID]</code>
