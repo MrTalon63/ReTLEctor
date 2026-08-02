@@ -3,14 +3,13 @@ import config from "./config";
 import log from "./logger";
 import fetchTle from "./tleFetcher";
 
-const FORMATS: Array<"tle" | "json" | "csv"> = ["tle", "json", "csv"];
-
 async function checkAndUpdateTles(): Promise<void> {
 	log.debug("Running scheduled TLE update check...");
 	const now = Date.now();
 
 	for (const group of config.allowedGroups) {
-		for (const format of FORMATS) {
+		const queryType = config.specialGroups.includes(group) ? "SPECIAL" : "GROUP";
+		for (const format of config.formats) {
 			const tsKey = `${group}_timestamp_${format}`;
 			const timestamp = (await kv.get(tsKey)) as number | null;
 
@@ -20,7 +19,7 @@ async function checkAndUpdateTles(): Promise<void> {
 				const ageDays = timestamp ? (age / (24 * 60 * 60 * 1000)).toFixed(1) : "infinity";
 				log.info(`Group "${group}" format "${format}" TLE age (${ageDays} days) >= maxStorageAge limit. Fetching fresh TLE...`);
 				try {
-					await fetchTle(group, format);
+					await fetchTle(group, format, queryType);
 				} catch (err) {
 					log.error(`Background cron failed to update group "${group}" format "${format}": ${err}`);
 				}

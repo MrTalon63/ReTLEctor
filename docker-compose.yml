@@ -5,12 +5,20 @@ services:
             - 3000:3000
         environment:
             - ALLOWED_GROUPS=visual # Those are groups of TLEs you can get from Celestrak at https://celestrak.org/NORAD/elements/ active group is always included
-            - CACHE_DURATION=86400 # Specifies for how long to cache the TLEs in seconds.
-            - CACHE_ACTIVE_DURATION=7200 # Specifies for how long to cache the active group TLEs in seconds. (Active group is used for per NORAD ID requests)
+            - SPECIAL_GROUPS=gpz,gpz-plus,decaying # Custom list of special Celestrak query groups
+            - CACHE_DURATION=86400 # Specifies for how long to cache standard TLEs in seconds.
+            - CACHE_ACTIVE_DURATION=7200 # Specifies for how long to cache active group TLEs in seconds. (Active group is used for per NORAD ID requests)
+            - CACHE_NORAD_DURATION=86400 # Specifies per-NORAD ID cache duration in seconds.
             - RATE_LIMIT_MAX_REQUESTS=60 # Maximum number of requests allowed within the rate limit window.
             - RATE_LIMIT_WINDOW=60 # Duration of the rate limit window in seconds.
             - KV_FILE=./data/kv.json # Path to the key-value store file.
             - LOG_LEVEL=info # Log level (e.g., debug, info, warn, error).
             - PORT=3000 # Port to run the server on.
+            - CONTACT_EMAIL=admin@example.com # Operator contact email/info sent in User-Agent header to Celestrak.
+            - CELESTRAK_URL=https://celestrak.org/NORAD/elements/gp.php # Upstream Celestrak API URL.
+            - CELESTRAK_MAX_DIRECT_REQUESTS=25 # Hourly cap on direct NORAD ID lookups from Celestrak.
+            - SITE_URL=https://example.com # Public domain URL of this instance.
+            - GITHUB_URL=https://github.com/MrTalon63/ReTLEctor # Repository link shown in footer and header.
+            - APP_NAME=ReTLEctor # Application title.
         volumes:
-            - data:/app/data # This is where the cached TLEs will be stored, you can change it to any directory you want.
+            - data:/app/data # Storage path for cached TLEs.

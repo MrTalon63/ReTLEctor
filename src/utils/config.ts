@@ -1,9 +1,17 @@
+import { version } from "../../package.json";
+
+const contact = process.env.CONTACT_EMAIL || process.env.CONTACT_INFO || process.env.OPERATOR_CONTACT || null;
+
 const config = {
-	allowedGroups: process.env.ALLOWED_GROUPS ? ["active", ...process.env.ALLOWED_GROUPS.split(",")] : ["active"],
+	allowedGroups: Array.from(new Set(["active", ...(process.env.ALLOWED_GROUPS ? process.env.ALLOWED_GROUPS.split(",").map((g) => g.trim()).filter(Boolean) : [])])),
+	specialGroups: process.env.SPECIAL_GROUPS ? process.env.SPECIAL_GROUPS.split(",").map((g) => g.trim()).filter(Boolean) : ["gpz", "gpz-plus", "decaying"],
+	formats: ["tle", "json", "csv"] as const,
 	logLevel: process.env.LOG_LEVEL || "info",
 	port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
 	redisUri: process.env.REDIS_URI || null,
 	kvFile: process.env.KV_FILE || "./data/kv.json",
+	kvWriteDelay: process.env.KV_WRITE_DELAY ? parseInt(process.env.KV_WRITE_DELAY) : 100,
+	kvBatchSize: process.env.KV_BATCH_SIZE ? parseInt(process.env.KV_BATCH_SIZE) : 100,
 	lokiUri: process.env.LOKI_URI || null,
 	lokiAuth: process.env.LOKI_AUTH || undefined,
 	rateLimitWindow: process.env.RATE_LIMIT_WINDOW ? parseInt(process.env.RATE_LIMIT_WINDOW) * 1000 : 60 * 1000,
@@ -17,6 +25,16 @@ const config = {
 			: parseInt(process.env.MAX_STORAGE_AGE) * 1000
 		: 14 * 24 * 60 * 60 * 1000,
 	cronInterval: process.env.CRON_INTERVAL ? parseInt(process.env.CRON_INTERVAL) * 1000 : 60 * 60 * 1000,
+	celestrakUrl: process.env.CELESTRAK_URL || "https://celestrak.org/NORAD/elements/gp.php",
+	celestrakMaxDirectRequests: process.env.CELESTRAK_MAX_DIRECT_REQUESTS ? parseInt(process.env.CELESTRAK_MAX_DIRECT_REQUESTS) : 25,
+	siteUrl: process.env.SITE_URL || "",
+	githubUrl: process.env.GITHUB_URL || "https://github.com/MrTalon63/ReTLEctor",
+	appName: process.env.APP_NAME || "ReTLEctor",
+	staticCacheMaxAge: process.env.STATIC_CACHE_MAX_AGE ? parseInt(process.env.STATIC_CACHE_MAX_AGE) : 86400,
+	contactInfo: contact,
+	userAgent: contact
+		? `ReTLEctor/${version} (${contact}; +${process.env.GITHUB_URL || "https://github.com/MrTalon63/ReTLEctor"})`
+		: `ReTLEctor/${version} (unconfigured-contact; +${process.env.GITHUB_URL || "https://github.com/MrTalon63/ReTLEctor"})`,
 };
 
 export default config;

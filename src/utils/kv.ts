@@ -15,7 +15,7 @@ if (config.redisUri) {
 	});
 
 	kv.on("error", (err) => {
-		log.child(err).error("Keyv Redis error:");
+		log.error({ err }, "Keyv Redis error:");
 	});
 } else {
 	log.info("Using file-based storage for key-value storage.");
@@ -23,12 +23,12 @@ if (config.redisUri) {
 	kv = new Keyv({
 		store: new KeyvFile({
 			filename: config.kvFile,
-			writeDelay: 100,
+			writeDelay: config.kvWriteDelay,
 		}),
 	});
 
 	kv.on("error", (err) => {
-		log.child(err).error("Keyv File error:");
+		log.error({ err }, "Keyv File error:");
 	});
 }
 

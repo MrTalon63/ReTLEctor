@@ -6,6 +6,14 @@ import config from "./config";
 import fetchTle from "./tleFetcher";
 import { version } from "../../package.json";
 
+function extractNoradId(tleLine1: string): number | null {
+	if (tleLine1 && tleLine1.startsWith("1 ")) {
+		const num = parseInt(tleLine1.slice(2, 7).trim(), 10);
+		if (!isNaN(num) && num > 0) return num;
+	}
+	return null;
+}
+
 async function getObjectsTle(noradId: number): Promise<string> {
 	let tleData = (await kv.get(`tle_${noradId}`)) as string | null;
 	const timestamp: number | undefined = await kv.get(`tle_${noradId}_timestamp`);
@@ -28,39 +36,68 @@ async function getObjectsTle(noradId: number): Promise<string> {
 			allTles = (await kv.get("active_tle")) as string | null;
 
 			if (allTles) {
-				const lines = allTles.split("\n");
-				const setPromises: Promise<boolean>[] = [];
-				for (let i = 0; i < lines.length; i += 3) {
+				const lines = allTles.trim().split(/\r?\n/);
+				const BATCH_SIZE = config.kvBatchSize;
+				let currentBatch: Promise<boolean>[] = [];
+
+				for (let i = 0; i + 2 < lines.length; i += 3) {
 					const idLine = lines[i + 0];
 					const tleLine1 = lines[i + 1];
 					const tleLine2 = lines[i + 2];
 
 					if (idLine && tleLine1 && tleLine2) {
-						const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
-						const tleString = `${idLine}\n${tleLine1}\n${tleLine2}`;
-						if (parsed.number === noradId) {
-							tleData = tleString;
+						let catNum = extractNoradId(tleLine1);
+						if (!catNum) {
+							try {
+								const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
+								catNum = parsed.number;
+							} catch {
+								catNum = null;
+							}
 						}
-						setPromises.push(kv.set(`tle_${parsed.number}`, tleString));
-						setPromises.push(kv.set(`tle_${parsed.number}_timestamp`, now));
+
+						if (catNum) {
+							const tleString = `${idLine}\n${tleLine1}\n${tleLine2}`;
+							if (catNum === noradId) {
+								tleData = tleString;
+							}
+							currentBatch.push(kv.set(`tle_${catNum}`, tleString));
+							currentBatch.push(kv.set(`tle_${catNum}_timestamp`, now));
+
+							if (currentBatch.length >= BATCH_SIZE) {
+								await Promise.all(currentBatch);
+								currentBatch = [];
+							}
+						}
 					}
 				}
-				await Promise.all(setPromises);
+				if (currentBatch.length > 0) {
+					await Promise.all(currentBatch);
+				}
 			} else {
 				log.error("No active TLEs available (fetch failed and no cache). Falling back to per-ID cache.");
 			}
 		} else {
-			// Active group is still fresh — just scan for the requested satellite without re-writing everything
+			// Active group is still fresh — scan for the requested satellite using fast string offset extraction
 			log.debug(`Active TLE group is fresh. Scanning for NORAD ID ${noradId} without re-caching all satellites.`);
-			const lines = allTles.split("\n");
-			for (let i = 0; i < lines.length; i += 3) {
+			const lines = allTles.trim().split(/\r?\n/);
+			for (let i = 0; i + 2 < lines.length; i += 3) {
 				const idLine = lines[i + 0];
 				const tleLine1 = lines[i + 1];
 				const tleLine2 = lines[i + 2];
 
 				if (idLine && tleLine1 && tleLine2) {
-					const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
-					if (parsed.number === noradId) {
+					let catNum = extractNoradId(tleLine1);
+					if (!catNum) {
+						try {
+							const parsed = tle.parse(`${idLine}\n${tleLine1}\n${tleLine2}`);
+							catNum = parsed.number;
+						} catch {
+							catNum = null;
+						}
+					}
+
+					if (catNum === noradId) {
 						tleData = `${idLine}\n${tleLine1}\n${tleLine2}`;
 						await kv.set(`tle_${noradId}`, tleData);
 						await kv.set(`tle_${noradId}_timestamp`, now);
@@ -74,23 +111,24 @@ async function getObjectsTle(noradId: number): Promise<string> {
 	// Not in active group - try fetching directly from Celestrak by CATNR, with rate limiting
 	if (!tleData) {
 		log.debug(`NORAD ID ${noradId} not found in active group. Attempting to fetch directly from Celestrak...`);
-		const url = `https://celestrak.org/NORAD/elements/gp.php?CATNR=${noradId}&FORMAT=tle`;
+		const url = `${config.celestrakUrl}?CATNR=${noradId}&FORMAT=tle`;
 
 		const cachedDirectData = (await kv.get(`tle_${noradId}`)) as string | null;
 
 		try {
 			let tries: number = (await kv.get(`celestrakTries`)) || 0;
-			const lastTry: number | undefined = await kv.get(`celestrakLastTry`);
+			let windowStart: number | undefined = await kv.get(`celestrakWindowStart`);
 
-			// Reset the counters if more than an hour has passed since the last request
-			if (lastTry && Date.now() - lastTry >= 60 * 60 * 1000) {
+			// Reset the counter if 1 hour has passed since the start of the rate-limit window
+			if (!windowStart || now - windowStart >= 60 * 60 * 1000) {
 				tries = 0;
+				windowStart = now;
 				await kv.set(`celestrakTries`, 0);
-				await kv.set(`celestrakLastTry`, Date.now());
+				await kv.set(`celestrakWindowStart`, now);
 			}
 
-			// We don't want to spam Celestrak with more than 25 requests per hour
-			if (tries >= 25) {
+			// Maximum direct requests per hour to avoid spamming Celestrak
+			if (tries >= config.celestrakMaxDirectRequests) {
 				log.warn(`Celestrak rate limit reached. Falling back to stale cache for NORAD ID ${noradId}.`);
 				if (cachedDirectData) return cachedDirectData;
 				throw new Error("Rate limit exceeded for Celestrak fetches");
@@ -98,12 +136,11 @@ async function getObjectsTle(noradId: number): Promise<string> {
 
 			const response = await fetch(url, {
 				headers: {
-					"User-Agent": `ReTLEctor/${version} (https://github.com/MrTalon63/ReTLEctor)`,
+					"User-Agent": config.userAgent,
 				},
 			});
 
 			await kv.set(`celestrakTries`, tries + 1);
-			await kv.set(`celestrakLastTry`, Date.now());
 
 			if (!response.ok) {
 				log.child({ status: response.status, statusText: response.statusText })
@@ -123,7 +160,7 @@ async function getObjectsTle(noradId: number): Promise<string> {
 				return cachedDirectData;
 			}
 			if (error instanceof Error) {
-				log.child(error).error(`Error fetching TLE for NORAD ID ${noradId}:`);
+				log.error({ err: error }, `Error fetching TLE for NORAD ID ${noradId}:`);
 			} else {
 				log.error(`Error fetching TLE for NORAD ID ${noradId}: ${error}`);
 			}

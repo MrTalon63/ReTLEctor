@@ -19,7 +19,7 @@ const noradRoute = new Elysia({ prefix: "/norad" })
 			if (msg.includes("No TLE data found")) {
 				return new Response(`No TLE data found for NORAD ID ${noradId}.`, { status: 404 });
 			}
-			log.child(error instanceof Error ? error : { error: msg }).error(`Failed to serve TLE for NORAD ID ${noradId}`);
+			log.error({ err: error }, `Failed to serve TLE for NORAD ID ${noradId}`);
 			return new Response("Failed to retrieve TLE data. Upstream may be unavailable.", { status: 503 });
 		}
 	});

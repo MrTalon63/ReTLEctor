@@ -1,4 +1,24 @@
-const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow, version }: { activeGroups: { name: string; lastUpdateTle: string; lastUpdateJson: string; lastUpdateCsv: string }[]; cacheDuration: number; maxReq: number; maxReqWindow: number; version: string }) => (
+import config from "../utils/config";
+
+const index = ({
+	activeGroups,
+	cacheDuration,
+	maxReq,
+	maxReqWindow,
+	version,
+	siteUrl = config.siteUrl,
+	githubUrl = config.githubUrl,
+	appName = config.appName,
+}: {
+	activeGroups: { name: string; lastUpdateTle: string; lastUpdateJson: string; lastUpdateCsv: string }[];
+	cacheDuration: number;
+	maxReq: number;
+	maxReqWindow: number;
+	version: string;
+	siteUrl?: string;
+	githubUrl?: string;
+	appName?: string;
+}) => (
 	<html lang="en">
 		<head>
 			<meta charset="UTF-8" />
@@ -8,27 +28,27 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow, version }: {
 			<meta name="keywords" content="TLE, Celestrak, satellite, cache, satrx" />
 			<meta name="author" content="MrTalon63" />
 			<meta name="theme-color" content="#3c4258" />
-			<meta property="og:title" content="ReTLEctor" />
+			<meta property="og:title" content={appName} />
 			<meta property="og:description" content="Celestrak TLE caching server" />
-			<meta property="og:image" content="https://retlector.eu/retlector.png" />
+			<meta property="og:image" content={siteUrl ? `${siteUrl.replace(/\/$/, "")}/retlector.png` : "/retlector.png"} />
 			<meta property="og:type" content="website" />
 			<meta name="twitter:card" content="summary" />
-			<meta name="twitter:title" content="ReTLEctor" />
+			<meta name="twitter:title" content={appName} />
 			<meta name="twitter:description" content="Celestrak TLE caching server" />
 			<meta name="robots" content="index, follow" />
-			<link rel="canonical" href="https://retlector.eu" />
+			{siteUrl ? <link rel="canonical" href={siteUrl} /> : null}
 			<link rel="icon" href="/favicon.ico" type="image/x-icon" />
-			<title>ReTLEctor</title>
+			<title>{appName}</title>
 			<link rel="stylesheet" href="/styles.css" />
 		</head>
 		<body>
 			<header>
 				<div class="header-inner">
 					<div>
-						<h1>ReTLEctor</h1>
+						<h1>{appName}</h1>
 						<p>Celestrak TLE caching proxy - v{version}</p>
 					</div>
-					<a class="header-gh btn" href="https://github.com/MrTalon63/ReTLEctor" target="_blank">
+					<a class="header-gh btn" href={githubUrl} target="_blank">
 						GitHub repository
 					</a>
 				</div>
@@ -82,7 +102,7 @@ const index = ({ activeGroups, cacheDuration, maxReq, maxReqWindow, version }: {
 						Rate limit: {maxReq} req / {maxReqWindow / 1000}s (Follow http headers for accurate rate limit info)
 					</span>
 				</div>
-				<a class="btn" href="https://github.com/MrTalon63/ReTLEctor" target="_blank">
+				<a class="btn" href={githubUrl} target="_blank">
 					View Source on GitHub
 				</a>
 			</main>
