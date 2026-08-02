@@ -3,7 +3,7 @@ import tle from "tle";
 import kv from "./kv";
 import log from "./logger";
 import config from "./config";
-import fetchTle from "./tleFetcher";
+import fetchTle, { isCorruptTleValue, isNotModifiedNotice } from "./tleFetcher";
 import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
 import { version } from "../../package.json";
 
@@ -150,6 +150,16 @@ async function getObjectsTle(noradId: number): Promise<string> {
 
 			await kv.set(`celestrakTries`, tries + 1);
 
+			const fetched = await response.text();
+
+			if (isNotModifiedNotice(fetched)) {
+				log.info(`Celestrak reported data for NORAD ID ${noradId} has not updated (HTTP ${response.status}). Serving cached data.`);
+				if (!response.ok) {
+					await triggerCelestrakLockout(response.status, `NORAD ID ${noradId} (403/429 notice)`);
+				}
+				if (cachedDirectData) return cachedDirectData;
+			}
+
 			if (!response.ok) {
 				await triggerCelestrakLockout(response.status, `NORAD ID ${noradId}`);
 				log.child({ status: response.status, statusText: response.statusText })
@@ -158,7 +168,12 @@ async function getObjectsTle(noradId: number): Promise<string> {
 				throw new Error(`Failed to fetch TLE from Celestrak: ${response.status} ${response.statusText} (24h lockout engaged)`);
 			}
 
-			const fetched = await response.text();
+			if (isCorruptTleValue(fetched)) {
+				log.warn(`Upstream returned corrupt/error payload for NORAD ID ${noradId}.`);
+				if (cachedDirectData) return cachedDirectData;
+				throw new Error(`Upstream returned corrupt TLE payload for NORAD ID ${noradId}`);
+			}
+
 			tleData = fetched;
 			await kv.set(`tle_${noradId}`, tleData);
 			await kv.set(`tle_${noradId}_timestamp`, Date.now());

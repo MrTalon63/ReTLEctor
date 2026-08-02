@@ -3,14 +3,36 @@ import kv from "./kv";
 import config from "./config";
 import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
 
+export function isNotModifiedNotice(value: string | null | undefined): boolean {
+	if (!value) return false;
+	const lower = value.trim().toLowerCase();
+	return (
+		lower.includes("gp data has not updated") ||
+		lower.includes("has not updated since") ||
+		lower.includes("data is updated once every")
+	);
+}
+
 export function isCorruptTleValue(value: string | null | undefined): boolean {
 	if (!value || value.trim().length === 0) return true;
 	const trimmed = value.trim();
+	const lower = trimmed.toLowerCase();
+
 	// HTML error pages
-	if (trimmed.startsWith("<") || trimmed.toLowerCase().startsWith("<!doctype")) return true;
-	// Celestrak plain-text error messages
-	if (trimmed.toLowerCase().startsWith("no gp data") || trimmed.toLowerCase().startsWith("no data")) return true;
-	if (trimmed.toLowerCase().includes("error") && trimmed.length < 200) return true;
+	if (trimmed.startsWith("<") || lower.startsWith("<!doctype") || lower.startsWith("<html")) return true;
+
+	// Celestrak plain-text error messages & "not updated" notices
+	if (
+		isNotModifiedNotice(trimmed) ||
+		lower.includes("no gp data") ||
+		lower.includes("no data") ||
+		lower.includes("rate limit") ||
+		lower.includes("exceeded") ||
+		(lower.includes("error") && trimmed.length < 300)
+	) {
+		return true;
+	}
+
 	return false;
 }
 
@@ -46,6 +68,23 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 			throw new Error(`Got 304 but no cached data for group "${group}", format "${format}"`);
 		}
 
+		const tleData = await response.text();
+
+		// Handle Celestrak plain-text notice ("GP data has not updated..."), which CelesTrak sends with 200 OK, 403 Forbidden, or 429 Too Many Requests
+		if (isNotModifiedNotice(tleData)) {
+			log.info(
+				`Celestrak reported GP data for group "${group}", format "${format}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`
+			);
+			await kv.set(`${group}_timestamp_${format}`, Date.now());
+			if (!response.ok) {
+				await triggerCelestrakLockout(response.status, `group "${group}" format "${format}" (403/429 not-modified notice)`);
+			}
+			if (cachedData) {
+				return cachedData;
+			}
+			throw new Error(`Celestrak reported data not updated (HTTP ${response.status}), but no cached data exists for group "${group}"`);
+		}
+
 		if (!response.ok) {
 			await triggerCelestrakLockout(response.status, `group "${group}" format "${format}"`);
 			if (cachedData) {
@@ -54,8 +93,6 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 			}
 			throw new Error(`Failed to fetch TLEs: ${response.status} ${response.statusText} (24h lockout engaged)`);
 		}
-
-		const tleData = await response.text();
 
 		if (isCorruptTleValue(tleData)) {
 			log.warn(`Upstream returned corrupt/error payload for group "${group}", format "${format}".`);
