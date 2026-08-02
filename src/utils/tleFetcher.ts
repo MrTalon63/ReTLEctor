@@ -1,7 +1,7 @@
 import log from "./logger";
 import kv from "./kv";
-
 import config from "./config";
+import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
 
 export function isCorruptTleValue(value: string | null | undefined): boolean {
 	if (!value || value.trim().length === 0) return true;
@@ -15,10 +15,19 @@ export function isCorruptTleValue(value: string | null | undefined): boolean {
 }
 
 async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", queryType: string = "GROUP"): Promise<string> {
+	const cachedData = (await kv.get(`${group}_${format}`)) as string | null;
+
+	const lockout = await isCelestrakLockedOut();
+	if (lockout.locked) {
+		log.warn(`Celestrak is currently in 24-hour lockout (until ${lockout.untilIso}). Skipping HTTP fetch for group "${group}", format "${format}".`);
+		if (cachedData) {
+			return cachedData;
+		}
+		throw new Error(`Celestrak is currently in 24-hour lockout until ${lockout.untilIso}`);
+	}
+
 	const url = `${config.celestrakUrl}?${queryType}=${group}&FORMAT=${format}`;
 	log.debug(`Fetching TLEs for group "${group}", format "${format}" from Celestrak...`);
-
-	const cachedData = (await kv.get(`${group}_${format}`)) as string | null;
 
 	try {
 		const lastFetch = (await kv.get(`${group}_timestamp_${format}`)) as number | null;
@@ -36,15 +45,14 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 			if (cachedData) return cachedData;
 			throw new Error(`Got 304 but no cached data for group "${group}", format "${format}"`);
 		}
-		if (!response.ok) {
-			log.child({ status: response.status, statusText: response.statusText })
-				.error(`Upstream returned ${response.status} for group "${group}", format "${format}". Will serve cached data if available.`);
 
+		if (!response.ok) {
+			await triggerCelestrakLockout(response.status, `group "${group}" format "${format}"`);
 			if (cachedData) {
-				log.warn(`Serving stale cached TLEs for group "${group}", format "${format}" due to upstream error.`);
+				log.warn(`Serving stale cached TLEs for group "${group}", format "${format}" due to non-200 response (${response.status}).`);
 				return cachedData;
 			}
-			throw new Error(`Failed to fetch TLEs: ${response.status} ${response.statusText}`);
+			throw new Error(`Failed to fetch TLEs: ${response.status} ${response.statusText} (24h lockout engaged)`);
 		}
 
 		const tleData = await response.text();
@@ -63,8 +71,7 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 		log.debug(`Successfully cached TLEs for group "${group}" in format "${format}".`);
 		return tleData;
 	} catch (error) {
-		if (cachedData && error instanceof Error && error.message.startsWith("Failed to fetch TLEs:")) {
-			// Already logged above, cachedData fallback returned — shouldn't reach here normally
+		if (cachedData && error instanceof Error && error.message.includes("(24h lockout engaged)")) {
 			return cachedData;
 		}
 		if (error instanceof Error) {

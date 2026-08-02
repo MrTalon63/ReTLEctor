@@ -4,6 +4,7 @@ import kv from "./kv";
 import log from "./logger";
 import config from "./config";
 import fetchTle from "./tleFetcher";
+import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
 import { version } from "../../package.json";
 
 function extractNoradId(tleLine1: string): number | null {
@@ -110,10 +111,17 @@ async function getObjectsTle(noradId: number): Promise<string> {
 
 	// Not in active group - try fetching directly from Celestrak by CATNR, with rate limiting
 	if (!tleData) {
+		const cachedDirectData = (await kv.get(`tle_${noradId}`)) as string | null;
+
+		const lockout = await isCelestrakLockedOut();
+		if (lockout.locked) {
+			log.warn(`Celestrak is in 24-hour lockout (until ${lockout.untilIso}). Skipping direct fetch for NORAD ID ${noradId}.`);
+			if (cachedDirectData) return cachedDirectData;
+			throw new Error(`Celestrak is currently in 24-hour lockout until ${lockout.untilIso}`);
+		}
+
 		log.debug(`NORAD ID ${noradId} not found in active group. Attempting to fetch directly from Celestrak...`);
 		const url = `${config.celestrakUrl}?CATNR=${noradId}&FORMAT=tle`;
-
-		const cachedDirectData = (await kv.get(`tle_${noradId}`)) as string | null;
 
 		try {
 			let tries: number = (await kv.get(`celestrakTries`)) || 0;
@@ -143,10 +151,11 @@ async function getObjectsTle(noradId: number): Promise<string> {
 			await kv.set(`celestrakTries`, tries + 1);
 
 			if (!response.ok) {
+				await triggerCelestrakLockout(response.status, `NORAD ID ${noradId}`);
 				log.child({ status: response.status, statusText: response.statusText })
 					.error(`Upstream returned ${response.status} for NORAD ID ${noradId}. Falling back to stale cache.`);
 				if (cachedDirectData) return cachedDirectData;
-				throw new Error(`Failed to fetch TLE from Celestrak: ${response.status} ${response.statusText}`);
+				throw new Error(`Failed to fetch TLE from Celestrak: ${response.status} ${response.statusText} (24h lockout engaged)`);
 			}
 
 			const fetched = await response.text();

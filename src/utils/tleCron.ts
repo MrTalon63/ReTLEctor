@@ -2,6 +2,7 @@ import kv from "./kv";
 import config from "./config";
 import log from "./logger";
 import fetchTle from "./tleFetcher";
+import { isCelestrakLockedOut } from "./lockout";
 
 export function getRandomJitter(maxJitterMs: number): number {
 	if (maxJitterMs <= 0) return 0;
@@ -9,6 +10,12 @@ export function getRandomJitter(maxJitterMs: number): number {
 }
 
 async function checkAndUpdateTles(): Promise<void> {
+	const lockout = await isCelestrakLockedOut();
+	if (lockout.locked) {
+		log.warn(`Celestrak is currently in 24-hour lockout (until ${lockout.untilIso}). Skipping background cron updates.`);
+		return;
+	}
+
 	log.debug("Running scheduled TLE update check...");
 	const now = Date.now();
 
@@ -18,20 +25,37 @@ async function checkAndUpdateTles(): Promise<void> {
 			const tsKey = `${group}_timestamp_${format}`;
 			const timestamp = (await kv.get(tsKey)) as number | null;
 
-			const age = timestamp ? now - timestamp : Infinity;
+			// Active 3LE is the core primary group needed for NORAD lookups
+			const isPrimaryGroup = group === "active" && format === "tle";
 
-			if (!timestamp || age >= config.maxStorageAge) {
-				const ageDays = timestamp ? (age / (24 * 60 * 60 * 1000)).toFixed(1) : "infinity";
-				log.info(`Group "${group}" format "${format}" TLE age (${ageDays} days) >= maxStorageAge limit. Fetching fresh TLE...`);
-				try {
-					await fetchTle(group, format, queryType);
-				} catch (err) {
-					log.error(`Background cron failed to update group "${group}" format "${format}": ${err}`);
+			// Only background-update if:
+			// 1) The primary group ('active_tle') is uninitialized, OR
+			// 2) The group/format was previously fetched by a user request AND is now stale
+			if (!timestamp) {
+				if (!isPrimaryGroup) {
+					// Skip uninitialized optional groups/formats — they will be fetched on-demand when requested by a user
+					continue;
 				}
-				// Stagger sequential fetches with a 1-3s random delay to avoid bursting Celestrak
-				const interFetchDelay = 1000 + Math.floor(Math.random() * 2000);
-				await new Promise((resolve) => setTimeout(resolve, interFetchDelay));
+				log.info(`Primary group "${group}" format "${format}" is uninitialized. Fetching initial TLE data...`);
+			} else {
+				const refreshThreshold = group === "active" ? config.cacheActiveDuration : config.cacheDuration;
+				const age = now - timestamp;
+				if (age < refreshThreshold) {
+					continue;
+				}
+				const ageHours = (age / (60 * 60 * 1000)).toFixed(1);
+				log.info(`Group "${group}" format "${format}" TLE age (${ageHours}h) exceeds cache duration. Refreshing TLE...`);
 			}
+
+			try {
+				await fetchTle(group, format, queryType);
+			} catch (err) {
+				log.error(`Background cron failed to update group "${group}" format "${format}": ${err}`);
+			}
+
+			// Stagger sequential background fetches with a 3-8s random delay to avoid bursting Celestrak
+			const interFetchDelay = 3000 + Math.floor(Math.random() * 5000);
+			await new Promise((resolve) => setTimeout(resolve, interFetchDelay));
 		}
 	}
 }
