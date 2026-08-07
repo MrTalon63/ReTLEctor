@@ -7,7 +7,10 @@ import groupHandler from "../utils/groupHandler";
 const tleRoute = new Elysia({ prefix: "/json" })
 	.use(limiter)
 	.get("/", () => {
-		return new Response(`Allowed groups: ${config.allowedGroups.join(", ")}`, { status: 200, headers: { "Content-Type": "text/plain" } });
+		return new Response(`Allowed groups: ${config.allowedGroups.join(", ")}`, {
+			status: 200,
+			headers: { "Content-Type": "text/plain" },
+		});
 	})
 	.get("/:group", async (ctx) => {
 		const group = ctx.params.group;

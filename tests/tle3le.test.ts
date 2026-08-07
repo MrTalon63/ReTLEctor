@@ -1,0 +1,187 @@
+import { describe, expect, test } from "bun:test";
+import { computeChecksum, csvTo3le, parse3le, parseOmmCsv } from "../src/utils/omm";
+
+describe("3LE format specification", () => {
+	test("Line 0 is exactly 24 characters (satellite name)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[0]).toHaveLength(24);
+		expect(lines[0]).toBe("TEST SAT                ");
+	});
+
+	test("Line 1 is exactly 69 characters", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1]).toHaveLength(69);
+	});
+
+	test("Line 2 is exactly 69 characters", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2]).toHaveLength(69);
+	});
+
+	test("Line 1 column 1 is '1' (line number)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1][0]).toBe("1");
+	});
+
+	test("Line 2 column 1 is '2' (line number)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2][0]).toBe("2");
+	});
+
+	test("Line 1 columns 3-7: catalog number (5 chars, right-justified)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(2, 7)).toBe("25544");
+	});
+
+	test("Line 1 column 8: classification", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1][7]).toBe("U");
+	});
+
+	test("Line 1 columns 10-17: international designator (8 chars)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(9, 17)).toBe("98067A  ");
+	});
+
+	test("Line 1 columns 19-20: epoch year (2 digits)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(18, 20)).toBe("26");
+	});
+
+	test("Line 1 columns 21-32: epoch day (fractional, 12 chars)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(20, 32)).toBe("218.05391056");
+	});
+
+	test("Line 1 column 69: checksum (mod 10)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+
+		const line1Data = lines[1].substring(0, 68);
+		const line1Checksum = parseInt(lines[1][68], 10);
+		expect(line1Checksum).toBe(computeChecksum(line1Data));
+
+		const line2Data = lines[2].substring(0, 68);
+		const line2Checksum = parseInt(lines[2][68], 10);
+		expect(line2Checksum).toBe(computeChecksum(line2Data));
+	});
+
+	test("Line 2 columns 3-7: catalog number matches line 1", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(2, 7)).toBe(lines[2].substring(2, 7));
+	});
+
+	test("Line 2 columns 9-16: inclination (8 chars, 4 decimal places)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2].substring(8, 16)).toBe(" 51.6321");
+	});
+
+	test("Line 2 columns 27-33: eccentricity (7 chars, leading decimal assumed)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2].substring(26, 33)).toBe("0007216");
+	});
+
+	test("Line 2 columns 53-63: mean motion (11 chars, 8 decimal places)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2].substring(52, 63)).toBe("15.49359774");
+	});
+
+	test("Line 2 columns 64-68: revolution number at epoch (5 digits)", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[2].substring(63, 68)).toBe("57948");
+	});
+});
+
+describe("3LE Alpha-5 format", () => {
+	test("Alpha-5 catalog number in 3LE line 1", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,100123,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const lines = tle.trim().split("\n");
+		expect(lines[1].substring(2, 7)).toBe("A0123");
+		expect(lines[2].substring(2, 7)).toBe("A0123");
+	});
+
+	test("Alpha-5 catalog number round-trips through parse3le", () => {
+		const csv = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
+TEST SAT,1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,100123,999,57948,0.00007969016,0.00003997,0`;
+		const tle = csvTo3le(csv);
+		const records = parse3le(tle);
+		expect(records[0].NORAD_CAT_ID).toBe(100123);
+	});
+});
+
+describe("3LE checksum validation", () => {
+	test("ISS example line 1 checksum is valid", () => {
+		const line1 = "1 25544U 98067A   26218.05391056  .00003997  00000+0  79690-4 0  9990";
+		const checksum = parseInt(line1[68], 10);
+		expect(checksum).toBe(computeChecksum(line1.substring(0, 68)));
+	});
+
+	test("ISS example line 2 checksum is valid", () => {
+		const line2 = "2 25544  51.6321  53.3065 0007216  17.1615 342.9616 15.49359774579487";
+		const checksum = parseInt(line2[68], 10);
+		expect(checksum).toBe(computeChecksum(line2.substring(0, 68)));
+	});
+
+	test("computeChecksum: letters count as 0", () => {
+		expect(computeChecksum("1 25544U")).toBe(1);
+
+		expect(computeChecksum("1 25544")).toBe(1);
+	});
+
+	test("computeChecksum: minus signs count as 1", () => {
+		expect(computeChecksum("1 25544-")).toBe(2);
+	});
+
+	test("computeChecksum: spaces and periods count as 0", () => {
+		expect(computeChecksum("1 25544.")).toBe(1);
+	});
+});

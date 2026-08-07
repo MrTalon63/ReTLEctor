@@ -5,7 +5,12 @@ import log from "./logger";
 import config from "./config";
 
 const limiter = new Elysia({ name: "rate-limiter" }).onRequest(async (ctx) => {
-	const ip = ctx.request.headers.get("x-forwarded-for") || ctx.request.headers.get("cf-connecting-ip") || ctx.request.headers.get("true-client-ip") || ctx.request.headers.get("x-real-ip") || "unknown";
+	const ip =
+		ctx.request.headers.get("x-forwarded-for") ||
+		ctx.request.headers.get("cf-connecting-ip") ||
+		ctx.request.headers.get("true-client-ip") ||
+		ctx.request.headers.get("x-real-ip") ||
+		"unknown";
 	const key = `rate_limit:${ip}`;
 	const now = Date.now();
 	const windowSize = config.rateLimitWindow;

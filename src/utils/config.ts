@@ -3,8 +3,29 @@ import { version } from "../../package.json";
 const contact = process.env.CONTACT_EMAIL || process.env.CONTACT_INFO || process.env.OPERATOR_CONTACT || null;
 
 const config = {
-	allowedGroups: Array.from(new Set(["active", ...(process.env.ALLOWED_GROUPS ? process.env.ALLOWED_GROUPS.split(",").map((g) => g.trim()).filter(Boolean) : [])])),
-	specialGroups: process.env.SPECIAL_GROUPS ? process.env.SPECIAL_GROUPS.split(",").map((g) => g.trim()).filter(Boolean) : ["gpz", "gpz-plus", "decaying"],
+	allowedGroups: Array.from(
+		new Set([
+			"active",
+			"active-no-starlink",
+			...(process.env.ALLOWED_GROUPS
+				? process.env.ALLOWED_GROUPS.split(",")
+						.map((g) => g.trim())
+						.filter(Boolean)
+				: []),
+		]),
+	),
+	specialGroups: process.env.SPECIAL_GROUPS
+		? process.env.SPECIAL_GROUPS.split(",")
+				.map((g) => g.trim())
+				.filter(Boolean)
+		: ["gpz", "gpz-plus", "decaying"],
+
+	derivedGroups: {
+		"active-no-starlink": {
+			source: "active",
+			filter: (name: string) => !name.toUpperCase().startsWith("STARLINK"),
+		},
+	} as const,
 	formats: ["tle", "json", "csv"] as const,
 	logLevel: process.env.LOG_LEVEL || "info",
 	port: process.env.PORT ? parseInt(process.env.PORT) : 3000,

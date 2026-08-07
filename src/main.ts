@@ -14,6 +14,7 @@ import log from "./utils/logger";
 import { startTleCron } from "./utils/tleCron";
 import { isCorruptTleValue } from "./utils/tleFetcher";
 import { getTleFreshnessStatus } from "./utils/tleStatus";
+import { isDerivedGroup, getSourceGroup } from "./utils/derivedGroup";
 import { version } from "../package.json";
 
 async function validateKvOnBootup(): Promise<void> {
@@ -21,14 +22,33 @@ async function validateKvOnBootup(): Promise<void> {
 	let purged = 0;
 
 	for (const group of config.allowedGroups) {
-		for (const format of config.formats) {
-			const dataKey = `${group}_${format}`;
-			const tsKey = `${group}_timestamp_${format}`;
-			const value = (await kv.get(dataKey)) as string | null;
+		if (isDerivedGroup(group)) {
+			continue;
+		}
 
-			if (isCorruptTleValue(value)) {
+		const csvKey = `${group}_csv`;
+		const csvTsKey = `${group}_timestamp_csv`;
+		const csvValue = (await kv.get(csvKey)) as string | null;
+
+		if (isCorruptTleValue(csvValue)) {
+			if (csvValue !== null && csvValue !== undefined) {
+				log.warn(
+					`KV entry "${csvKey}" looks corrupt — purging (length=${csvValue?.length ?? 0}, preview="${csvValue?.slice(0, 60).replace(/\n/g, "\\n")}")`,
+				);
+				await kv.delete(csvKey);
+				await kv.delete(csvTsKey);
+				purged++;
+			}
+		}
+
+		if (!csvValue) {
+			for (const format of config.formats) {
+				if (format === "csv") continue;
+				const dataKey = `${group}_${format}`;
+				const tsKey = `${group}_timestamp_${format}`;
+				const value = (await kv.get(dataKey)) as string | null;
 				if (value !== null && value !== undefined) {
-					log.warn(`KV entry "${dataKey}" looks corrupt — purging (length=${value?.length ?? 0}, preview="${value?.slice(0, 60).replace(/\n/g, "\\n")}")`);
+					log.warn(`KV entry "${dataKey}" has no source CSV — purging stale derived cache.`);
 					await kv.delete(dataKey);
 					await kv.delete(tsKey);
 					purged++;
@@ -51,33 +71,47 @@ const staticHeaders = { "Cache-Control": `public, max-age=${config.staticCacheMa
 
 new Elysia()
 	.use(wrap(log))
-	// Use HTML plugin for rendering the index page
+
 	.use(html())
-	.get("/styles.css", () => new Response(Bun.file(new URL("./pub/styles.css", import.meta.url)), { headers: { ...staticHeaders, "Content-Type": "text/css" } }))
-	.get("/favicon.ico", () => new Response(Bun.file(new URL("./pub/favicon.ico", import.meta.url)), { headers: { ...staticHeaders, "Content-Type": "image/x-icon" } }))
-	.get("/retlector.png", () => new Response(Bun.file(new URL("./pub/retlector.png", import.meta.url)), { headers: { ...staticHeaders, "Content-Type": "image/png" } }))
+	.get(
+		"/styles.css",
+		() =>
+			new Response(Bun.file(new URL("./pub/styles.css", import.meta.url)), {
+				headers: { ...staticHeaders, "Content-Type": "text/css" },
+			}),
+	)
+	.get(
+		"/favicon.ico",
+		() =>
+			new Response(Bun.file(new URL("./pub/favicon.ico", import.meta.url)), {
+				headers: { ...staticHeaders, "Content-Type": "image/x-icon" },
+			}),
+	)
+	.get(
+		"/retlector.png",
+		() =>
+			new Response(Bun.file(new URL("./pub/retlector.png", import.meta.url)), {
+				headers: { ...staticHeaders, "Content-Type": "image/png" },
+			}),
+	)
 	.get("/", async () => {
 		const now = Date.now();
 		const activeGroups = await Promise.all(
 			config.allowedGroups.map(async (group) => {
-				const [tleTimestamp, jsonTimestamp, csvTimestamp] = await Promise.all([
-					kv.get(`${group}_timestamp_tle`),
-					kv.get(`${group}_timestamp_json`),
-					kv.get(`${group}_timestamp_csv`),
-				]);
-				const tleStatus = getTleFreshnessStatus(tleTimestamp as string | number | null, group, now);
-				const jsonStatus = getTleFreshnessStatus(jsonTimestamp as string | number | null, group, now);
-				const csvStatus = getTleFreshnessStatus(csvTimestamp as string | number | null, group, now);
+				const sourceGroup = isDerivedGroup(group) ? getSourceGroup(group) : group;
+
+				const csvTimestamp = await kv.get(`${sourceGroup}_timestamp_csv`);
+				const status = getTleFreshnessStatus(csvTimestamp as string | number | null, group, now);
 				return {
 					name: group,
-					lastUpdateTle: tleStatus.isoDate,
-					lastUpdateJson: jsonStatus.isoDate,
-					lastUpdateCsv: csvStatus.isoDate,
-					tleStatus,
-					jsonStatus,
-					csvStatus,
+					lastUpdateTle: status.isoDate,
+					lastUpdateJson: status.isoDate,
+					lastUpdateCsv: status.isoDate,
+					tleStatus: status,
+					jsonStatus: status,
+					csvStatus: status,
 				};
-			})
+			}),
 		);
 		return index({
 			activeGroups,

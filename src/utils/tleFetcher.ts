@@ -2,14 +2,13 @@ import log from "./logger";
 import kv from "./kv";
 import config from "./config";
 import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
+import { csvTo3le, csvToJson, parseOmmCsv } from "./omm";
 
 export function isNotModifiedNotice(value: string | null | undefined): boolean {
 	if (!value) return false;
 	const lower = value.trim().toLowerCase();
 	return (
-		lower.includes("gp data has not updated") ||
-		lower.includes("has not updated since") ||
-		lower.includes("data is updated once every")
+		lower.includes("gp data has not updated") || lower.includes("has not updated since") || lower.includes("data is updated once every")
 	);
 }
 
@@ -18,10 +17,8 @@ export function isCorruptTleValue(value: string | null | undefined): boolean {
 	const trimmed = value.trim();
 	const lower = trimmed.toLowerCase();
 
-	// HTML error pages
 	if (trimmed.startsWith("<") || lower.startsWith("<!doctype") || lower.startsWith("<html")) return true;
 
-	// Celestrak plain-text error messages & "not updated" notices
 	if (
 		isNotModifiedNotice(trimmed) ||
 		lower.includes("no gp data") ||
@@ -37,22 +34,23 @@ export function isCorruptTleValue(value: string | null | undefined): boolean {
 }
 
 async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", queryType: string = "GROUP"): Promise<string> {
-	const cachedData = (await kv.get(`${group}_${format}`)) as string | null;
+	const upstreamFormat = "csv";
+	const cachedCsv = (await kv.get(`${group}_${upstreamFormat}`)) as string | null;
 
 	const lockout = await isCelestrakLockedOut();
 	if (lockout.locked) {
-		log.warn(`Celestrak is currently in 24-hour lockout (until ${lockout.untilIso}). Skipping HTTP fetch for group "${group}", format "${format}".`);
-		if (cachedData) {
-			return cachedData;
+		log.warn(`Celestrak is currently in 24-hour lockout (until ${lockout.untilIso}). Skipping HTTP fetch for group "${group}".`);
+		if (cachedCsv) {
+			return deriveFormat(cachedCsv, format);
 		}
 		throw new Error(`Celestrak is currently in 24-hour lockout until ${lockout.untilIso}`);
 	}
 
-	const url = `${config.celestrakUrl}?${queryType}=${group}&FORMAT=${format}`;
-	log.debug(`Fetching TLEs for group "${group}", format "${format}" from Celestrak...`);
+	const url = `${config.celestrakUrl}?${queryType}=${group}&FORMAT=${upstreamFormat}`;
+	log.debug(`Fetching GP data for group "${group}" in CSV format from Celestrak...`);
 
 	try {
-		const lastFetch = (await kv.get(`${group}_timestamp_${format}`)) as number | null;
+		const lastFetch = (await kv.get(`${group}_timestamp_${upstreamFormat}`)) as number | null;
 		const headers: Record<string, string> = {
 			"User-Agent": config.userAgent,
 		};
@@ -63,64 +61,99 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 		const response = await fetch(url, { headers });
 
 		if (response.status === 304) {
-			log.debug(`TLEs for group "${group}", format "${format}" not modified (304). Serving cached data.`);
-			if (cachedData) return cachedData;
-			throw new Error(`Got 304 but no cached data for group "${group}", format "${format}"`);
+			log.debug(`GP data for group "${group}" not modified (304). Serving cached data.`);
+			if (cachedCsv) return deriveFormat(cachedCsv, format);
+			throw new Error(`Got 304 but no cached data for group "${group}"`);
 		}
 
-		const tleData = await response.text();
+		const csvData = await response.text();
 
-		// Handle Celestrak plain-text notice ("GP data has not updated..."), which CelesTrak sends with 200 OK, 403 Forbidden, or 429 Too Many Requests
-		if (isNotModifiedNotice(tleData)) {
+		if (isNotModifiedNotice(csvData)) {
 			log.info(
-				`Celestrak reported GP data for group "${group}", format "${format}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`
+				`Celestrak reported GP data for group "${group}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`,
 			);
-			await kv.set(`${group}_timestamp_${format}`, Date.now());
+			await kv.set(`${group}_timestamp_${upstreamFormat}`, Date.now());
 			if (!response.ok) {
-				await triggerCelestrakLockout(response.status, `group "${group}" format "${format}" (403/429 not-modified notice)`);
+				await triggerCelestrakLockout(response.status, `group "${group}" (403/429 not-modified notice)`);
 			}
-			if (cachedData) {
-				return cachedData;
+			if (cachedCsv) {
+				return deriveFormat(cachedCsv, format);
 			}
-			throw new Error(`Celestrak reported data not updated (HTTP ${response.status}), but no cached data exists for group "${group}"`);
+			throw new Error(
+				`Celestrak reported data not updated (HTTP ${response.status}), but no cached data exists for group "${group}"`,
+			);
 		}
 
 		if (!response.ok) {
-			await triggerCelestrakLockout(response.status, `group "${group}" format "${format}"`);
-			if (cachedData) {
-				log.warn(`Serving stale cached TLEs for group "${group}", format "${format}" due to non-200 response (${response.status}).`);
-				return cachedData;
+			await triggerCelestrakLockout(response.status, `group "${group}"`);
+			if (cachedCsv) {
+				log.warn(`Serving stale cached GP data for group "${group}" due to non-200 response (${response.status}).`);
+				return deriveFormat(cachedCsv, format);
 			}
-			throw new Error(`Failed to fetch TLEs: ${response.status} ${response.statusText} (24h lockout engaged)`);
+			throw new Error(`Failed to fetch GP data: ${response.status} ${response.statusText} (24h lockout engaged)`);
 		}
 
-		if (isCorruptTleValue(tleData)) {
-			log.warn(`Upstream returned corrupt/error payload for group "${group}", format "${format}".`);
-			if (cachedData) {
-				log.warn(`Serving stale cached TLEs for group "${group}", format "${format}" due to corrupt payload.`);
-				return cachedData;
+		if (isCorruptTleValue(csvData)) {
+			log.warn(`Upstream returned corrupt/error payload for group "${group}".`);
+			if (cachedCsv) {
+				log.warn(`Serving stale cached GP data for group "${group}" due to corrupt payload.`);
+				return deriveFormat(cachedCsv, format);
 			}
-			throw new Error(`Upstream returned corrupt TLE payload for group "${group}"`);
+			throw new Error(`Upstream returned corrupt GP payload for group "${group}"`);
 		}
 
-		await kv.set(`${group}_${format}`, tleData);
-		await kv.set(`${group}_timestamp_${format}`, Date.now());
-		log.debug(`Successfully cached TLEs for group "${group}" in format "${format}".`);
-		return tleData;
+		try {
+			parseOmmCsv(csvData);
+		} catch (e) {
+			log.warn(`Upstream returned unparseable CSV for group "${group}": ${e}`);
+			if (cachedCsv) {
+				log.warn(`Serving stale cached GP data for group "${group}" due to unparseable CSV.`);
+				return deriveFormat(cachedCsv, format);
+			}
+			throw new Error(`Upstream returned unparseable CSV for group "${group}"`);
+		}
+
+		await kv.set(`${group}_${upstreamFormat}`, csvData);
+		await kv.set(`${group}_timestamp_${upstreamFormat}`, Date.now());
+
+		const tleData = csvTo3le(csvData);
+		const jsonData = csvToJson(csvData);
+
+		await kv.set(`${group}_tle`, tleData);
+		await kv.set(`${group}_json`, jsonData);
+		await kv.set(`${group}_timestamp_tle`, Date.now());
+		await kv.set(`${group}_timestamp_json`, Date.now());
+
+		log.debug(`Successfully cached GP data for group "${group}" (CSV + derived TLE/JSON).`);
+
+		return deriveFormat(csvData, format);
 	} catch (error) {
-		if (cachedData && error instanceof Error && error.message.includes("(24h lockout engaged)")) {
-			return cachedData;
+		if (cachedCsv && error instanceof Error && error.message.includes("(24h lockout engaged)")) {
+			return deriveFormat(cachedCsv, format);
 		}
 		if (error instanceof Error) {
-			log.error({ err: error }, `Error fetching TLEs for group "${group}" in format "${format}":`);
+			log.error({ err: error }, `Error fetching GP data for group "${group}":`);
 		} else {
-			log.error(`Error fetching TLEs for group "${group}" in format "${format}": ${error}`);
+			log.error(`Error fetching GP data for group "${group}": ${error}`);
 		}
-		if (cachedData) {
-			log.warn(`Serving stale cached TLEs for group "${group}", format "${format}" after fetch error.`);
-			return cachedData;
+		if (cachedCsv) {
+			log.warn(`Serving stale cached GP data for group "${group}" after fetch error.`);
+			return deriveFormat(cachedCsv, format);
 		}
 		throw error;
+	}
+}
+
+function deriveFormat(csvData: string, format: "tle" | "json" | "csv"): string {
+	switch (format) {
+		case "tle":
+			return csvTo3le(csvData);
+		case "json":
+			return csvToJson(csvData);
+		case "csv":
+			return csvData;
+		default:
+			return csvData;
 	}
 }
 

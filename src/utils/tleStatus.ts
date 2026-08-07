@@ -22,7 +22,7 @@ export function formatRelativeTime(msAge: number): string {
 export function getTleFreshnessStatus(
 	timestampVal: string | number | null | undefined,
 	groupName: string,
-	now: number = Date.now()
+	now: number = Date.now(),
 ): TleStatusInfo {
 	if (!timestampVal) {
 		return {
@@ -46,7 +46,6 @@ export function getTleFreshnessStatus(
 	const isoDate = date.toISOString();
 	const label = formatRelativeTime(ageMs);
 
-	// 6 hours for 'active' group, config.cacheDuration (24h default) for rest
 	const expectedDuration = groupName === "active" ? 6 * 60 * 60 * 1000 : config.cacheDuration;
 
 	if (ageMs <= expectedDuration) {

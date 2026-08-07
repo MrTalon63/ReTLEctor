@@ -96,10 +96,18 @@ const index = ({
 					<div class="table-header">
 						<h2>Cached Groups</h2>
 						<div class="status-legend" title="Freshness indicators based on update threshold (6h for active, 24h for rest)">
-							<span class="legend-item"><span class="status-dot dot-fresh"></span> Fresh</span>
-							<span class="legend-item"><span class="status-dot dot-stale"></span> Stale</span>
-							<span class="legend-item"><span class="status-dot dot-expired"></span> Expired</span>
-							<span class="legend-item"><span class="status-dot dot-never"></span> Never</span>
+							<span class="legend-item">
+								<span class="status-dot dot-fresh"></span> Fresh
+							</span>
+							<span class="legend-item">
+								<span class="status-dot dot-stale"></span> Stale
+							</span>
+							<span class="legend-item">
+								<span class="status-dot dot-expired"></span> Expired
+							</span>
+							<span class="legend-item">
+								<span class="status-dot dot-never"></span> Never
+							</span>
 						</div>
 					</div>
 					<div class="table-wrap">
