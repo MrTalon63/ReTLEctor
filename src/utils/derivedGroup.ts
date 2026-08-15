@@ -1,7 +1,7 @@
 import kv from "./kv";
 import config from "./config";
 import log from "./logger";
-import { parseOmmCsv, filterRecordsToCsv, csvTo3le, csvToJson } from "./omm";
+import { parseOmmCsv, filterRecordsToCsv, csvTo3le, csvToJson, csvToKvn } from "./omm";
 
 export function isDerivedGroup(group: string): boolean {
 	return group in config.derivedGroups;
@@ -12,7 +12,7 @@ export function getSourceGroup(group: string): string | null {
 	return def ? def.source : null;
 }
 
-export async function getDerivedGroupFormat(group: string, format: "tle" | "json" | "csv"): Promise<string> {
+export async function getDerivedGroupFormat(group: string, format: "tle" | "json" | "csv" | "kvn"): Promise<string> {
 	const def = (config.derivedGroups as Record<string, { source: string; filter: (name: string) => boolean }>)[group];
 	if (!def) {
 		throw new Error(`Unknown derived group: ${group}`);
@@ -33,6 +33,8 @@ export async function getDerivedGroupFormat(group: string, format: "tle" | "json
 			return csvTo3le(filteredCsv);
 		case "json":
 			return csvToJson(filteredCsv);
+		case "kvn":
+			return csvToKvn(filteredCsv);
 		case "csv":
 			return filteredCsv;
 		default:

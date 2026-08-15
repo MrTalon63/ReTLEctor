@@ -46,7 +46,7 @@ export function getTleFreshnessStatus(
 	const isoDate = date.toISOString();
 	const label = formatRelativeTime(ageMs);
 
-	const expectedDuration = groupName === "active" ? 6 * 60 * 60 * 1000 : config.cacheDuration;
+	const expectedDuration = groupName === "active" ? config.cacheActiveDuration : config.cacheDuration;
 
 	if (ageMs <= expectedDuration) {
 		return { status: "fresh", label, isoDate };

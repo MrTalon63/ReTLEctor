@@ -13,23 +13,23 @@ describe("OMM CSV parsing", () => {
 		const records = parseOmmCsv(issCsv);
 		expect(records).toHaveLength(1);
 
-		const rec = records[0];
+		const rec = records[0]!;
 		expect(rec.OBJECT_NAME).toBe("ISS (ZARYA)");
 		expect(rec.OBJECT_ID).toBe("1998-067A");
-		expect(rec.EPOCH).toBe("2026-08-06T01:17:37.872384");
-		expect(rec.MEAN_MOTION).toBeCloseTo(15.49359774, 8);
-		expect(rec.ECCENTRICITY).toBeCloseTo(0.00072161, 8);
-		expect(rec.INCLINATION).toBeCloseTo(51.6321, 4);
-		expect(rec.RA_OF_ASC_NODE).toBeCloseTo(53.3065, 4);
-		expect(rec.ARG_OF_PERICENTER).toBeCloseTo(17.1615, 4);
-		expect(rec.MEAN_ANOMALY).toBeCloseTo(342.9616, 4);
+		expect(rec.EPOCH).toBe("2026-08-15T02:00:30.363264");
+		expect(rec.MEAN_MOTION).toBeCloseTo(15.49446478, 8);
+		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007564, 7);
+		expect(rec.INCLINATION).toBeCloseTo(51.633, 4);
+		expect(rec.RA_OF_ASC_NODE).toBeCloseTo(8.6029, 4);
+		expect(rec.ARG_OF_PERICENTER).toBeCloseTo(47.5489, 4);
+		expect(rec.MEAN_ANOMALY).toBeCloseTo(312.6138, 4);
 		expect(rec.EPHEMERIS_TYPE).toBe(0);
 		expect(rec.CLASSIFICATION_TYPE).toBe("U");
 		expect(rec.NORAD_CAT_ID).toBe(25544);
 		expect(rec.ELEMENT_SET_NO).toBe(999);
-		expect(rec.REV_AT_EPOCH).toBe(57948);
-		expect(rec.BSTAR).toBeCloseTo(7.969016e-5, 10);
-		expect(rec.MEAN_MOTION_DOT).toBeCloseTo(3.997e-5, 8);
+		expect(rec.REV_AT_EPOCH).toBe(58088);
+		expect(rec.BSTAR).toBeCloseTo(9.8393e-5, 10);
+		expect(rec.MEAN_MOTION_DOT).toBeCloseTo(5.059e-5, 8);
 		expect(rec.MEAN_MOTION_DDOT).toBe(0);
 	});
 
@@ -43,7 +43,7 @@ describe("OMM CSV parsing", () => {
 "TEST, SATELLITE",1998-067A,2026-08-06T01:17:37.872384,15.49359774,0.00072161,51.6321,53.3065,17.1615,342.9616,0,U,25544,999,57948,0.00007969016,0.00003997,0`;
 		const records = parseOmmCsv(csv);
 		expect(records).toHaveLength(1);
-		expect(records[0].OBJECT_NAME).toBe("TEST, SATELLITE");
+		expect(records[0]!.OBJECT_NAME).toBe("TEST, SATELLITE");
 	});
 });
 
@@ -72,52 +72,52 @@ describe("OMM CSV to 3LE conversion", () => {
 
 		expect(lines[0]).toBe("ISS (ZARYA)             ");
 
-		expect(lines[1].startsWith("1 ")).toBe(true);
-		expect(lines[1].substring(2, 7)).toBe("25544");
-		expect(lines[1].substring(7, 8)).toBe("U");
+		expect(lines[1]!.startsWith("1 ")).toBe(true);
+		expect(lines[1]!.substring(2, 7)).toBe("25544");
+		expect(lines[1]!.substring(7, 8)).toBe("U");
 
-		expect(lines[2].startsWith("2 ")).toBe(true);
-		expect(lines[2].substring(2, 7)).toBe("25544");
+		expect(lines[2]!.startsWith("2 ")).toBe(true);
+		expect(lines[2]!.substring(2, 7)).toBe("25544");
 	});
 
 	test("csvTo3le produces correct epoch", () => {
 		const tle = csvTo3le(issCsv);
 		const lines = tle.trim().split("\n");
 
-		expect(lines[1].substring(18, 20)).toBe("26");
+		expect(lines[1]!.substring(18, 20)).toBe("26");
 
-		expect(lines[1].substring(20, 32)).toBe("218.05391056");
+		expect(lines[1]!.substring(20, 32)).toBe("227.08368476");
 	});
 
 	test("csvTo3le produces correct orbital elements", () => {
 		const tle = csvTo3le(issCsv);
 		const lines = tle.trim().split("\n");
 
-		expect(lines[2].substring(8, 16).trim()).toBe("51.6321");
+		expect(lines[2]!.substring(8, 16).trim()).toBe("51.6330");
 
-		expect(lines[2].substring(17, 25).trim()).toBe("53.3065");
+		expect(lines[2]!.substring(17, 25).trim()).toBe("8.6029");
 
-		expect(lines[2].substring(26, 33)).toBe("0007216");
+		expect(lines[2]!.substring(26, 33)).toBe("0007564");
 
-		expect(lines[2].substring(34, 42).trim()).toBe("17.1615");
+		expect(lines[2]!.substring(34, 42).trim()).toBe("47.5489");
 
-		expect(lines[2].substring(43, 51).trim()).toBe("342.9616");
+		expect(lines[2]!.substring(43, 51).trim()).toBe("312.6138");
 
-		expect(lines[2].substring(52, 63).trim()).toBe("15.49359774");
+		expect(lines[2]!.substring(52, 63).trim()).toBe("15.49446478");
 
-		expect(lines[2].substring(63, 68)).toBe("57948");
+		expect(lines[2]!.substring(63, 68)).toBe("58088");
 	});
 
 	test("csvTo3le produces valid checksums", () => {
 		const tle = csvTo3le(issCsv);
 		const lines = tle.trim().split("\n");
 
-		const line1Checksum = parseInt(lines[1][68], 10);
-		const computedLine1 = computeChecksum(lines[1].substring(0, 68));
+		const line1Checksum = parseInt(lines[1]![68]!, 10);
+		const computedLine1 = computeChecksum(lines[1]!.substring(0, 68));
 		expect(line1Checksum).toBe(computedLine1);
 
-		const line2Checksum = parseInt(lines[2][68], 10);
-		const computedLine2 = computeChecksum(lines[2].substring(0, 68));
+		const line2Checksum = parseInt(lines[2]![68]!, 10);
+		const computedLine2 = computeChecksum(lines[2]!.substring(0, 68));
 		expect(line2Checksum).toBe(computedLine2);
 	});
 
@@ -131,13 +131,13 @@ describe("OMM CSV to 3LE conversion", () => {
 
 describe("TLE checksum", () => {
 	test("computeChecksum for ISS line 1", () => {
-		const line1 = "1 25544U 98067A   26218.05391056  .00003997  00000+0  79690-4 0  999";
-		expect(computeChecksum(line1)).toBe(0);
+		const line1 = "1 25544U 98067A   26227.08368476  .00005059  00000+0  98393-4 0  9995";
+		expect(computeChecksum(line1.substring(0, 68))).toBe(5);
 	});
 
 	test("computeChecksum for ISS line 2", () => {
-		const line2 = "2 25544  51.6321  53.3065 0007216  17.1615 342.9616 15.49359774579487";
-		expect(computeChecksum(line2.substring(0, 68))).toBe(7);
+		const line2 = "2 25544  51.6330   8.6029 0007564  47.5489 312.6138 15.49446478580889";
+		expect(computeChecksum(line2.substring(0, 68))).toBe(9);
 	});
 
 	test("computeChecksum handles minus signs", () => {
@@ -147,22 +147,22 @@ describe("TLE checksum", () => {
 
 describe("Epoch conversion", () => {
 	test("isoToTleEpoch converts ISS epoch correctly", () => {
-		const { year, day } = isoToTleEpoch("2026-08-06T01:17:37.872384");
+		const { year, day } = isoToTleEpoch("2026-08-15T02:00:30.363264");
 		expect(year).toBe("26");
-		expect(day).toBe("218.05391056");
+		expect(day).toBe("227.08368476");
 	});
 
 	test("tleEpochToIso converts back correctly", () => {
-		const iso = tleEpochToIso("26", "218.05391056");
+		const iso = tleEpochToIso("26", "227.08368476");
 
 		const date = new Date(iso);
 		expect(date.getUTCFullYear()).toBe(2026);
 		expect(date.getUTCMonth()).toBe(7);
-		expect(date.getUTCDate()).toBe(6);
+		expect(date.getUTCDate()).toBe(15);
 	});
 
 	test("round-trip: isoToTleEpoch → tleEpochToIso", () => {
-		const original = "2026-08-06T01:17:37.872384";
+		const original = "2026-08-15T02:00:30.363264";
 		const { year, day } = isoToTleEpoch(original);
 		const result = tleEpochToIso(year, day);
 
@@ -184,15 +184,15 @@ describe("3LE parsing", () => {
 		const records = parse3le(issTle);
 		expect(records).toHaveLength(1);
 
-		const rec = records[0];
+		const rec = records[0]!;
 		expect(rec.OBJECT_NAME).toBe("ISS (ZARYA)");
 		expect(rec.NORAD_CAT_ID).toBe(25544);
 		expect(rec.CLASSIFICATION_TYPE).toBe("U");
 		expect(rec.OBJECT_ID).toBe("98067A");
-		expect(rec.MEAN_MOTION).toBeCloseTo(15.49359774, 8);
+		expect(rec.MEAN_MOTION).toBeCloseTo(15.49446478, 8);
 
-		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007216, 7);
-		expect(rec.INCLINATION).toBeCloseTo(51.6321, 4);
+		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007564, 7);
+		expect(rec.INCLINATION).toBeCloseTo(51.633, 4);
 	});
 
 	test("parse3le handles 2LE format (no name line)", () => {
@@ -200,7 +200,7 @@ describe("3LE parsing", () => {
 2 25544  51.6321  53.3065 0007216  17.1615 342.9616 15.49359774579487`;
 		const records = parse3le(tle2le);
 		expect(records).toHaveLength(1);
-		expect(records[0].NORAD_CAT_ID).toBe(25544);
+		expect(records[0]!.NORAD_CAT_ID).toBe(25544);
 	});
 
 	test("parse3le handles Alpha-5 catalog numbers", () => {
@@ -209,7 +209,7 @@ describe("3LE parsing", () => {
 2 A0123  51.6321  53.3065 0007216  17.1615 342.9616 15.49359774579487`;
 		const records = parse3le(tleAlpha5);
 		expect(records).toHaveLength(1);
-		expect(records[0].NORAD_CAT_ID).toBe(100123);
+		expect(records[0]!.NORAD_CAT_ID).toBe(100123);
 	});
 });
 
@@ -219,16 +219,74 @@ describe("CSV ↔ 3LE round-trip", () => {
 		const records = parse3le(tle);
 		expect(records).toHaveLength(1);
 
-		const rec = records[0];
+		const rec = records[0]!;
 		expect(rec.OBJECT_NAME).toBe("ISS (ZARYA)");
 		expect(rec.NORAD_CAT_ID).toBe(25544);
-		expect(rec.MEAN_MOTION).toBeCloseTo(15.49359774, 8);
+		expect(rec.MEAN_MOTION).toBeCloseTo(15.49446478, 8);
 
-		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007216, 7);
-		expect(rec.INCLINATION).toBeCloseTo(51.6321, 4);
-		expect(rec.RA_OF_ASC_NODE).toBeCloseTo(53.3065, 4);
-		expect(rec.ARG_OF_PERICENTER).toBeCloseTo(17.1615, 4);
-		expect(rec.MEAN_ANOMALY).toBeCloseTo(342.9616, 4);
-		expect(rec.REV_AT_EPOCH).toBe(57948);
+		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007564, 7);
+		expect(rec.INCLINATION).toBeCloseTo(51.633, 4);
+		expect(rec.RA_OF_ASC_NODE).toBeCloseTo(8.6029, 4);
+		expect(rec.ARG_OF_PERICENTER).toBeCloseTo(47.5489, 4);
+		expect(rec.MEAN_ANOMALY).toBeCloseTo(312.6138, 4);
+		expect(rec.REV_AT_EPOCH).toBe(58088);
+	});
+});
+
+describe("CCSDS OMM KVN conversion and parsing", () => {
+	const { parseOmmKvn, csvToKvn, kvnToJson, kvnToCsv, kvnTo3le } = require("../src/utils/omm");
+	const issKvn = readFileSync(join(examplesDir, "iss.kvn"), "utf-8");
+
+	test("parseOmmKvn parses iss.kvn correctly", () => {
+		const records = parseOmmKvn(issKvn);
+		expect(records).toHaveLength(1);
+		const rec = records[0]!;
+		expect(rec.OBJECT_NAME).toBe("ISS (ZARYA)");
+		expect(rec.OBJECT_ID).toBe("1998-067A");
+		expect(rec.EPOCH).toBe("2026-08-15T02:00:30.363264");
+		expect(rec.NORAD_CAT_ID).toBe(25544);
+		expect(rec.MEAN_MOTION).toBeCloseTo(15.49446478, 8);
+		expect(rec.ECCENTRICITY).toBeCloseTo(0.0007564, 7);
+		expect(rec.INCLINATION).toBeCloseTo(51.633, 4);
+		expect(rec.RA_OF_ASC_NODE).toBeCloseTo(8.6029, 4);
+		expect(rec.ARG_OF_PERICENTER).toBeCloseTo(47.5489, 4);
+		expect(rec.MEAN_ANOMALY).toBeCloseTo(312.6138, 4);
+		expect(rec.REV_AT_EPOCH).toBe(58088);
+	});
+
+	test("csvToKvn generates valid KVN containing required headers and fields", () => {
+		const kvn = csvToKvn(issCsv);
+		expect(kvn).toContain("CCSDS_OMM_VERS = 2.0");
+		expect(kvn).toContain("OBJECT_NAME    = ISS (ZARYA)");
+		expect(kvn).toContain("OBJECT_ID      = 1998-067A");
+		expect(kvn).toContain("CENTER_NAME    = EARTH");
+		expect(kvn).toContain("REF_FRAME      = TEME");
+		expect(kvn).toContain("NORAD_CAT_ID   = 25544");
+		expect(kvn).toContain("MEAN_MOTION    = 15.49446478");
+	});
+
+	test("round-trip: KVN → JSON → KVN preserves record integrity", () => {
+		const json = kvnToJson(issKvn);
+		const parsed = JSON.parse(json);
+		expect(parsed).toHaveLength(1);
+		expect(parsed[0]!.NORAD_CAT_ID).toBe(25544);
+		expect(parsed[0]!.OBJECT_NAME).toBe("ISS (ZARYA)");
+	});
+
+	test("round-trip: KVN → CSV → KVN", () => {
+		const csv = kvnToCsv(issKvn);
+		const records = parseOmmCsv(csv);
+		expect(records).toHaveLength(1);
+		expect(records[0]!.NORAD_CAT_ID).toBe(25544);
+		expect(records[0]!.OBJECT_NAME).toBe("ISS (ZARYA)");
+	});
+
+	test("kvnTo3le produces valid 3LE from KVN", () => {
+		const tle = kvnTo3le(issKvn);
+		const lines = tle.trim().split("\n");
+		expect(lines).toHaveLength(3);
+		expect(lines[0]).toBe("ISS (ZARYA)             ");
+		expect(lines[1]!.substring(2, 7)).toBe("25544");
+		expect(lines[2]!.substring(2, 7)).toBe("25544");
 	});
 });

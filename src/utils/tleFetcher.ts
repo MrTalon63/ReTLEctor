@@ -1,8 +1,10 @@
 import log from "./logger";
 import kv from "./kv";
 import config from "./config";
-import { isCelestrakLockedOut, triggerCelestrakLockout } from "./lockout";
-import { csvTo3le, csvToJson, parseOmmCsv } from "./omm";
+import { isCelestrakLockedOut, triggerCelestrakLockout, formatLockoutDuration } from "./lockout";
+import { csvTo3le, csvToJson, csvToKvn, parseOmmCsv } from "./omm";
+
+import type { OrbitFormat } from "./tleGetter";
 
 export function isNotModifiedNotice(value: string | null | undefined): boolean {
 	if (!value) return false;
@@ -33,21 +35,23 @@ export function isCorruptTleValue(value: string | null | undefined): boolean {
 	return false;
 }
 
-async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", queryType: string = "GROUP"): Promise<string> {
+async function fetchTle(group: string, format: OrbitFormat = "tle", queryType: string = "GROUP"): Promise<string> {
 	const upstreamFormat = "csv";
 	const cachedCsv = (await kv.get(`${group}_${upstreamFormat}`)) as string | null;
 
 	const lockout = await isCelestrakLockedOut();
 	if (lockout.locked) {
-		log.warn(`Celestrak is currently in 24-hour lockout (until ${lockout.untilIso}). Skipping HTTP fetch for group "${group}".`);
+		log.warn(
+			`Celestrak is currently in ${formatLockoutDuration()} lockout (until ${lockout.untilIso}). Skipping HTTP fetch for group "${group}".`,
+		);
 		if (cachedCsv) {
 			return deriveFormat(cachedCsv, format);
 		}
-		throw new Error(`Celestrak is currently in 24-hour lockout until ${lockout.untilIso}`);
+		throw new Error(`Celestrak is currently in ${formatLockoutDuration()} lockout until ${lockout.untilIso}`);
 	}
 
 	const url = `${config.celestrakUrl}?${queryType}=${group}&FORMAT=${upstreamFormat}`;
-	log.debug(`Fetching GP data for group "${group}" in CSV format from Celestrak...`);
+	log.debug(`Fetching orbital data for group "${group}" in CSV format from Celestrak...`);
 
 	try {
 		const lastFetch = (await kv.get(`${group}_timestamp_${upstreamFormat}`)) as number | null;
@@ -61,7 +65,7 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 		const response = await fetch(url, { headers });
 
 		if (response.status === 304) {
-			log.debug(`GP data for group "${group}" not modified (304). Serving cached data.`);
+			log.debug(`Orbital data for group "${group}" not modified (304). Serving cached data.`);
 			if (cachedCsv) return deriveFormat(cachedCsv, format);
 			throw new Error(`Got 304 but no cached data for group "${group}"`);
 		}
@@ -70,7 +74,7 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 
 		if (isNotModifiedNotice(csvData)) {
 			log.info(
-				`Celestrak reported GP data for group "${group}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`,
+				`Celestrak reported orbital data for group "${group}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`,
 			);
 			await kv.set(`${group}_timestamp_${upstreamFormat}`, Date.now());
 			if (!response.ok) {
@@ -87,19 +91,21 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 		if (!response.ok) {
 			await triggerCelestrakLockout(response.status, `group "${group}"`);
 			if (cachedCsv) {
-				log.warn(`Serving stale cached GP data for group "${group}" due to non-200 response (${response.status}).`);
+				log.warn(`Serving stale cached orbital data for group "${group}" due to non-200 response (${response.status}).`);
 				return deriveFormat(cachedCsv, format);
 			}
-			throw new Error(`Failed to fetch GP data: ${response.status} ${response.statusText} (24h lockout engaged)`);
+			throw new Error(
+				`Failed to fetch orbital data: ${response.status} ${response.statusText} (${formatLockoutDuration()} lockout engaged)`,
+			);
 		}
 
 		if (isCorruptTleValue(csvData)) {
 			log.warn(`Upstream returned corrupt/error payload for group "${group}".`);
 			if (cachedCsv) {
-				log.warn(`Serving stale cached GP data for group "${group}" due to corrupt payload.`);
+				log.warn(`Serving stale cached orbital data for group "${group}" due to corrupt payload.`);
 				return deriveFormat(cachedCsv, format);
 			}
-			throw new Error(`Upstream returned corrupt GP payload for group "${group}"`);
+			throw new Error(`Upstream returned corrupt orbital payload for group "${group}"`);
 		}
 
 		try {
@@ -107,7 +113,7 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 		} catch (e) {
 			log.warn(`Upstream returned unparseable CSV for group "${group}": ${e}`);
 			if (cachedCsv) {
-				log.warn(`Serving stale cached GP data for group "${group}" due to unparseable CSV.`);
+				log.warn(`Serving stale cached orbital data for group "${group}" due to unparseable CSV.`);
 				return deriveFormat(cachedCsv, format);
 			}
 			throw new Error(`Upstream returned unparseable CSV for group "${group}"`);
@@ -118,38 +124,43 @@ async function fetchTle(group: string, format: "tle" | "json" | "csv" = "tle", q
 
 		const tleData = csvTo3le(csvData);
 		const jsonData = csvToJson(csvData);
+		const kvnData = csvToKvn(csvData);
 
 		await kv.set(`${group}_tle`, tleData);
 		await kv.set(`${group}_json`, jsonData);
+		await kv.set(`${group}_kvn`, kvnData);
 		await kv.set(`${group}_timestamp_tle`, Date.now());
 		await kv.set(`${group}_timestamp_json`, Date.now());
+		await kv.set(`${group}_timestamp_kvn`, Date.now());
 
-		log.debug(`Successfully cached GP data for group "${group}" (CSV + derived TLE/JSON).`);
+		log.debug(`Successfully cached orbital data for group "${group}" (CSV + derived 3LE/JSON/KVN).`);
 
 		return deriveFormat(csvData, format);
 	} catch (error) {
-		if (cachedCsv && error instanceof Error && error.message.includes("(24h lockout engaged)")) {
+		if (cachedCsv && error instanceof Error && error.message.includes("lockout engaged")) {
 			return deriveFormat(cachedCsv, format);
 		}
 		if (error instanceof Error) {
-			log.error({ err: error }, `Error fetching GP data for group "${group}":`);
+			log.error({ err: error }, `Error fetching orbital data for group "${group}":`);
 		} else {
-			log.error(`Error fetching GP data for group "${group}": ${error}`);
+			log.error(`Error fetching orbital data for group "${group}": ${error}`);
 		}
 		if (cachedCsv) {
-			log.warn(`Serving stale cached GP data for group "${group}" after fetch error.`);
+			log.warn(`Serving stale cached orbital data for group "${group}" after fetch error.`);
 			return deriveFormat(cachedCsv, format);
 		}
 		throw error;
 	}
 }
 
-function deriveFormat(csvData: string, format: "tle" | "json" | "csv"): string {
+function deriveFormat(csvData: string, format: "tle" | "json" | "csv" | "kvn"): string {
 	switch (format) {
 		case "tle":
 			return csvTo3le(csvData);
 		case "json":
 			return csvToJson(csvData);
+		case "kvn":
+			return csvToKvn(csvData);
 		case "csv":
 			return csvData;
 		default:

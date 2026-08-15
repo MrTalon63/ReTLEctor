@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { formatRelativeTime, getTleFreshnessStatus } from "../src/utils/tleStatus";
+import config from "../src/utils/config";
 
 describe("tleStatus utility", () => {
 	test("formatRelativeTime formats durations correctly", () => {
@@ -9,26 +10,26 @@ describe("tleStatus utility", () => {
 		expect(formatRelativeTime(172800000)).toBe("2d ago");
 	});
 
-	test("getTleFreshnessStatus for active group (6h threshold)", () => {
+	test("getTleFreshnessStatus for active group (configured active threshold)", () => {
 		const now = Date.now();
-		const oneHourAgo = now - 1 * 60 * 60 * 1000;
-		const sevenHoursAgo = now - 7 * 60 * 60 * 1000;
-		const fifteenHoursAgo = now - 15 * 60 * 60 * 1000;
+		const halfDuration = now - 0.5 * config.cacheActiveDuration;
+		const oneAndHalfDuration = now - 1.5 * config.cacheActiveDuration;
+		const tripleDuration = now - 3 * config.cacheActiveDuration;
 
-		expect(getTleFreshnessStatus(oneHourAgo, "active", now).status).toBe("fresh");
-		expect(getTleFreshnessStatus(sevenHoursAgo, "active", now).status).toBe("stale");
-		expect(getTleFreshnessStatus(fifteenHoursAgo, "active", now).status).toBe("expired");
+		expect(getTleFreshnessStatus(halfDuration, "active", now).status).toBe("fresh");
+		expect(getTleFreshnessStatus(oneAndHalfDuration, "active", now).status).toBe("stale");
+		expect(getTleFreshnessStatus(tripleDuration, "active", now).status).toBe("expired");
 		expect(getTleFreshnessStatus(null, "active", now).status).toBe("never");
 	});
 
-	test("getTleFreshnessStatus for default group (24h threshold)", () => {
+	test("getTleFreshnessStatus for default group (configured threshold)", () => {
 		const now = Date.now();
-		const tenHoursAgo = now - 10 * 60 * 60 * 1000;
-		const thirtyHoursAgo = now - 30 * 60 * 60 * 1000;
-		const sixtyHoursAgo = now - 60 * 60 * 1000 * 1000;
+		const halfDuration = now - 0.5 * config.cacheDuration;
+		const oneAndHalfDuration = now - 1.5 * config.cacheDuration;
+		const tripleDuration = now - 3 * config.cacheDuration;
 
-		expect(getTleFreshnessStatus(tenHoursAgo, "visual", now).status).toBe("fresh");
-		expect(getTleFreshnessStatus(thirtyHoursAgo, "visual", now).status).toBe("stale");
-		expect(getTleFreshnessStatus(sixtyHoursAgo, "visual", now).status).toBe("expired");
+		expect(getTleFreshnessStatus(halfDuration, "visual", now).status).toBe("fresh");
+		expect(getTleFreshnessStatus(oneAndHalfDuration, "visual", now).status).toBe("stale");
+		expect(getTleFreshnessStatus(tripleDuration, "visual", now).status).toBe("expired");
 	});
 });

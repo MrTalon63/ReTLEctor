@@ -26,7 +26,7 @@ const config = {
 			filter: (name: string) => !name.toUpperCase().startsWith("STARLINK"),
 		},
 	} as const,
-	formats: ["tle", "json", "csv"] as const,
+	formats: ["tle", "json", "csv", "kvn"] as const,
 	logLevel: process.env.LOG_LEVEL || "info",
 	port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
 	redisUri: process.env.REDIS_URI || null,
@@ -37,8 +37,8 @@ const config = {
 	lokiAuth: process.env.LOKI_AUTH || undefined,
 	rateLimitWindow: process.env.RATE_LIMIT_WINDOW ? parseInt(process.env.RATE_LIMIT_WINDOW) * 1000 : 60 * 1000,
 	rateLimitMaxRequests: process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 60,
-	cacheDuration: process.env.CACHE_DURATION ? parseInt(process.env.CACHE_DURATION) * 1000 : 24 * 60 * 60 * 1000,
-	cacheActiveDuration: process.env.CACHE_ACTIVE_DURATION ? parseInt(process.env.CACHE_ACTIVE_DURATION) * 1000 : 2 * 60 * 60 * 1000,
+	cacheDuration: process.env.CACHE_DURATION ? parseInt(process.env.CACHE_DURATION) * 1000 : 12 * 60 * 60 * 1000,
+	cacheActiveDuration: process.env.CACHE_ACTIVE_DURATION ? parseInt(process.env.CACHE_ACTIVE_DURATION) * 1000 : 4 * 60 * 60 * 1000,
 	cacheNoradDuration: process.env.CACHE_NORAD_DURATION ? parseInt(process.env.CACHE_NORAD_DURATION) * 1000 : 24 * 60 * 60 * 1000,
 	maxStorageAge: process.env.MAX_STORAGE_AGE
 		? parseInt(process.env.MAX_STORAGE_AGE) < 365
@@ -53,6 +53,10 @@ const config = {
 	githubUrl: process.env.GITHUB_URL || "https://github.com/MrTalon63/ReTLEctor",
 	appName: process.env.APP_NAME || "ReTLEctor",
 	staticCacheMaxAge: process.env.STATIC_CACHE_MAX_AGE ? parseInt(process.env.STATIC_CACHE_MAX_AGE) : 86400,
+	celestrakLockDuration:
+		process.env.CELESTRAK_LOCK_DURATION || process.env.CELESTRACK_LOCK_DURATION
+			? parseInt(process.env.CELESTRAK_LOCK_DURATION || process.env.CELESTRACK_LOCK_DURATION!) * 1000
+			: 12 * 60 * 60 * 1000,
 	contactInfo: contact,
 	userAgent: contact
 		? `ReTLEctor/${version} (${contact}; +${process.env.GITHUB_URL || "https://github.com/MrTalon63/ReTLEctor"})`

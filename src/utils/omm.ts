@@ -98,7 +98,7 @@ function getNumber(fields: string[], colIndex: Record<string, number>, colName: 
 }
 
 function convertIntDesig(objectId: string): string {
-	if (!objectId) return "          ";
+	if (!objectId) return "        ";
 	const trimmed = objectId.trim();
 
 	const match = trimmed.match(/^(\d{4})-(\d{3})(.*)$/);
@@ -228,7 +228,7 @@ export function isoToTleEpoch(iso: string): EpochParts {
 	const msInDay = 24 * 60 * 60 * 1000;
 	const dayOfYear = (date.getTime() - startOfYear) / msInDay + 1;
 
-	const dayStr = dayOfYear.toFixed(8);
+	const dayStr = dayOfYear.toFixed(8).padStart(12, "0");
 
 	return { year: twoDigitYear, day: dayStr };
 }
@@ -285,7 +285,7 @@ function buildLine1(f: Line1Fields): string {
 	chars[18] = f.epochYear[0];
 	chars[19] = f.epochYear[1];
 
-	const epochDayPadded = f.epochDay.padEnd(12);
+	const epochDayPadded = f.epochDay.padStart(12, "0");
 	for (let i = 0; i < 12; i++) chars[20 + i] = epochDayPadded[i];
 
 	const firstDeriv = formatFirstDerivative(f.meanMotionDot);
@@ -535,8 +535,8 @@ export function recordsToCsv(records: OmmRecord[]): string {
 	const rows = records.map((rec) => {
 		return OMM_CSV_COLUMNS.map((col) => {
 			const val = (rec as any)[col];
-			if (typeof val === "string" && val.includes(",")) {
-				return `"${val}"`;
+			if (typeof val === "string" && (val.includes(",") || val.includes('"') || val.includes("\n") || val.includes("\r"))) {
+				return `"${val.replace(/"/g, '""')}"`;
 			}
 			return String(val ?? "");
 		}).join(",");
@@ -554,13 +554,210 @@ export function jsonToCsv(jsonText: string): string {
 	return recordsToCsv(records);
 }
 
+function formatKvnScientific(val: number): string {
+	if (val === 0 || isNaN(val)) return "0";
+	const sign = val < 0 ? "-" : "";
+	const absVal = Math.abs(val);
+	const exp = Math.floor(Math.log10(absVal)) + 1;
+	const mantissa = absVal / Math.pow(10, exp);
+	const mantissaStr = mantissa.toFixed(5).replace(/^0\./, ".");
+	return `${sign}${mantissaStr}E${exp >= 0 ? "+" + exp : exp}`;
+}
+
+function formatKvnDecimal(val: number): string {
+	if (isNaN(val)) return "0";
+	if (val > 0 && val < 1) {
+		return String(val).replace(/^0\./, ".");
+	}
+	return String(val);
+}
+
+export function recordToKvn(rec: OmmRecord): string {
+	const lines = [
+		"CCSDS_OMM_VERS = 2.0",
+		"CREATION_DATE  = ",
+		"ORIGINATOR     = ",
+		"",
+		`OBJECT_NAME    = ${rec.OBJECT_NAME}`,
+		`OBJECT_ID      = ${rec.OBJECT_ID}`,
+		"CENTER_NAME    = EARTH",
+		"REF_FRAME      = TEME",
+		"TIME_SYSTEM    = UTC",
+		"MEAN_ELEMENT_THEORY = SGP/SGP4",
+		"",
+		`EPOCH          = ${rec.EPOCH}`,
+		`MEAN_MOTION    = ${rec.MEAN_MOTION}`,
+		`ECCENTRICITY   = ${formatKvnDecimal(rec.ECCENTRICITY)}`,
+		`INCLINATION    = ${rec.INCLINATION}`,
+		`RA_OF_ASC_NODE = ${rec.RA_OF_ASC_NODE}`,
+		`ARG_OF_PERICENTER = ${rec.ARG_OF_PERICENTER}`,
+		`MEAN_ANOMALY   = ${rec.MEAN_ANOMALY}`,
+		"",
+		`EPHEMERIS_TYPE = ${rec.EPHEMERIS_TYPE}`,
+		`CLASSIFICATION_TYPE = ${rec.CLASSIFICATION_TYPE || "U"}`,
+		`NORAD_CAT_ID   = ${rec.NORAD_CAT_ID}`,
+		`ELEMENT_SET_NO = ${rec.ELEMENT_SET_NO}`,
+		`REV_AT_EPOCH   = ${rec.REV_AT_EPOCH}`,
+		`BSTAR          = ${formatKvnScientific(rec.BSTAR)}`,
+		`MEAN_MOTION_DOT = ${formatKvnScientific(rec.MEAN_MOTION_DOT)}`,
+		`MEAN_MOTION_DDOT = ${rec.MEAN_MOTION_DDOT === 0 ? "0" : formatKvnScientific(rec.MEAN_MOTION_DDOT)}`,
+	];
+	return lines.join("\n") + "\n";
+}
+
+export function recordsToKvn(records: OmmRecord[]): string {
+	return records.map((rec) => recordToKvn(rec)).join("\n");
+}
+
+export function csvToKvn(csvText: string): string {
+	const records = parseOmmCsv(csvText);
+	return recordsToKvn(records);
+}
+
+export function jsonToKvn(jsonText: string): string {
+	const records = JSON.parse(jsonText) as OmmRecord[];
+	return recordsToKvn(records);
+}
+
+export function parseOmmKvn(kvnText: string): OmmRecord[] {
+	const lines = kvnText.split(/\r?\n/);
+	const records: OmmRecord[] = [];
+	let current: Partial<OmmRecord> | null = null;
+
+	const finalizeCurrent = () => {
+		if (current && (current.OBJECT_NAME || current.NORAD_CAT_ID)) {
+			records.push({
+				OBJECT_NAME: current.OBJECT_NAME || "",
+				OBJECT_ID: current.OBJECT_ID || "",
+				EPOCH: current.EPOCH || "",
+				MEAN_MOTION: current.MEAN_MOTION || 0,
+				ECCENTRICITY: current.ECCENTRICITY || 0,
+				INCLINATION: current.INCLINATION || 0,
+				RA_OF_ASC_NODE: current.RA_OF_ASC_NODE || 0,
+				ARG_OF_PERICENTER: current.ARG_OF_PERICENTER || 0,
+				MEAN_ANOMALY: current.MEAN_ANOMALY || 0,
+				EPHEMERIS_TYPE: current.EPHEMERIS_TYPE || 0,
+				CLASSIFICATION_TYPE: current.CLASSIFICATION_TYPE || "U",
+				NORAD_CAT_ID: current.NORAD_CAT_ID || 0,
+				ELEMENT_SET_NO: current.ELEMENT_SET_NO || 0,
+				REV_AT_EPOCH: current.REV_AT_EPOCH || 0,
+				BSTAR: current.BSTAR || 0,
+				MEAN_MOTION_DOT: current.MEAN_MOTION_DOT || 0,
+				MEAN_MOTION_DDOT: current.MEAN_MOTION_DDOT || 0,
+			});
+		}
+		current = null;
+	};
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("COMMENT")) continue;
+
+		const match = trimmed.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/i);
+		if (!match) continue;
+
+		const key = (match[1] ?? "").toUpperCase().trim();
+		const val = (match[2] ?? "").trim();
+
+		if (key === "CCSDS_OMM_VERS" && current && Object.keys(current).length > 0) {
+			finalizeCurrent();
+		}
+
+		if (!current) {
+			current = {};
+		}
+
+		switch (key) {
+			case "OBJECT_NAME":
+				if (current.OBJECT_NAME && current.NORAD_CAT_ID) {
+					finalizeCurrent();
+					current = { OBJECT_NAME: val };
+				} else {
+					current.OBJECT_NAME = val;
+				}
+				break;
+			case "OBJECT_ID":
+				current.OBJECT_ID = val;
+				break;
+			case "EPOCH":
+				current.EPOCH = val;
+				break;
+			case "MEAN_MOTION":
+				current.MEAN_MOTION = parseFloat(val) || 0;
+				break;
+			case "ECCENTRICITY":
+				current.ECCENTRICITY = parseFloat(val) || 0;
+				break;
+			case "INCLINATION":
+				current.INCLINATION = parseFloat(val) || 0;
+				break;
+			case "RA_OF_ASC_NODE":
+				current.RA_OF_ASC_NODE = parseFloat(val) || 0;
+				break;
+			case "ARG_OF_PERICENTER":
+				current.ARG_OF_PERICENTER = parseFloat(val) || 0;
+				break;
+			case "MEAN_ANOMALY":
+				current.MEAN_ANOMALY = parseFloat(val) || 0;
+				break;
+			case "EPHEMERIS_TYPE":
+				current.EPHEMERIS_TYPE = parseInt(val, 10) || 0;
+				break;
+			case "CLASSIFICATION_TYPE":
+				current.CLASSIFICATION_TYPE = val || "U";
+				break;
+			case "NORAD_CAT_ID":
+				current.NORAD_CAT_ID = parseInt(val, 10) || 0;
+				break;
+			case "ELEMENT_SET_NO":
+				current.ELEMENT_SET_NO = parseInt(val, 10) || 0;
+				break;
+			case "REV_AT_EPOCH":
+				current.REV_AT_EPOCH = parseInt(val, 10) || 0;
+				break;
+			case "BSTAR":
+				current.BSTAR = parseFloat(val) || 0;
+				break;
+			case "MEAN_MOTION_DOT":
+				current.MEAN_MOTION_DOT = parseFloat(val) || 0;
+				break;
+			case "MEAN_MOTION_DDOT":
+				current.MEAN_MOTION_DDOT = parseFloat(val) || 0;
+				break;
+		}
+	}
+
+	finalizeCurrent();
+	return records;
+}
+
+export function kvnToJson(kvnText: string): string {
+	return JSON.stringify(parseOmmKvn(kvnText));
+}
+
+export function kvnToCsv(kvnText: string): string {
+	return recordsToCsv(parseOmmKvn(kvnText));
+}
+
+export function kvnTo3le(kvnText: string): string {
+	return csvTo3le(kvnToCsv(kvnText));
+}
+
 export default {
 	parseOmmCsv,
+	parseOmmKvn,
 	csvToJson,
 	csvTo3le,
 	csvToTle,
+	csvToKvn,
 	jsonTo3le,
 	jsonToCsv,
+	jsonToKvn,
+	kvnToJson,
+	kvnToCsv,
+	kvnTo3le,
+	recordToKvn,
+	recordsToKvn,
 	recordsToCsv,
 	filterRecordsToCsv,
 	parse3le,
