@@ -104,11 +104,18 @@ export async function getNoradCsv(noradId: number): Promise<{ csv: string; recor
 
 		await kv.set(`celestrakTries`, tries + 1);
 
+		if (response.status === 404) {
+			log.info(`Celestrak returned 404 for NORAD ID ${noradId}.`);
+			const err = new Error(`No orbital data found for NORAD ID ${noradId}`);
+			(err as any).statusCode = 404;
+			throw err;
+		}
+
 		const fetched = await response.text();
 
 		if (isNotModifiedNotice(fetched)) {
 			log.info(`Celestrak reported data for NORAD ID ${noradId} has not updated (HTTP ${response.status}). Serving cached data.`);
-			if (!response.ok) {
+			if (!response.ok && response.status !== 404) {
 				await triggerCelestrakLockout(response.status, `NORAD ID ${noradId} (403/429 notice)`);
 			}
 			if (cachedDirectData) return { csv: cachedDirectData, timestamp: directTimestamp };
@@ -124,6 +131,12 @@ export async function getNoradCsv(noradId: number): Promise<{ csv: string; recor
 		}
 
 		if (isCorruptTleValue(fetched)) {
+			if (fetched.toLowerCase().includes("no gp data") || fetched.toLowerCase().includes("no data")) {
+				log.info(`Celestrak reported no data for NORAD ID ${noradId}.`);
+				const err = new Error(`No orbital data found for NORAD ID ${noradId}`);
+				(err as any).statusCode = 404;
+				throw err;
+			}
 			log.warn(`Upstream returned corrupt/error payload for NORAD ID ${noradId}.`);
 			if (cachedDirectData) return { csv: cachedDirectData, timestamp: directTimestamp };
 			throw new Error(`Upstream returned corrupt GP payload for NORAD ID ${noradId}`);
@@ -131,7 +144,9 @@ export async function getNoradCsv(noradId: number): Promise<{ csv: string; recor
 
 		const parsedRecords = parseOmmCsv(fetched);
 		if (parsedRecords.length === 0) {
-			throw new Error(`No orbital data found for NORAD ID ${noradId}`);
+			const err = new Error(`No orbital data found for NORAD ID ${noradId}`);
+			(err as any).statusCode = 404;
+			throw err;
 		}
 
 		const cleanCsv = recordsToCsv(parsedRecords);
@@ -140,6 +155,9 @@ export async function getNoradCsv(noradId: number): Promise<{ csv: string; recor
 		log.debug(`Successfully fetched GP data for NORAD ID ${noradId} from Celestrak.`);
 		return { csv: cleanCsv, record: parsedRecords[0], timestamp: Date.now() };
 	} catch (error) {
+		if ((error as any)?.statusCode === 404 || (error instanceof Error && error.message.includes("No orbital data found"))) {
+			throw error;
+		}
 		if (cachedDirectData) {
 			log.warn(`Serving stale cached data for NORAD ID ${noradId} after fetch error.`);
 			return { csv: cachedDirectData, timestamp: directTimestamp };
@@ -214,11 +232,17 @@ export async function handleNoradRequest(idParam: string, format: OrbitFormat): 
 		});
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		if (msg.includes("No orbital data found") || msg.includes("No TLE data found")) {
-			return new Response(`No orbital data found for NORAD ID ${noradId}.`, { status: 404 });
+		if ((error as any)?.statusCode === 404 || msg.includes("No orbital data found") || msg.includes("No TLE data found") || msg.includes("404")) {
+			return new Response(`No orbital data found for NORAD ID ${noradId}.`, {
+				status: 404,
+				headers: { "Content-Type": "text/plain" },
+			});
 		}
 		log.error({ err: error }, `Failed to serve NORAD ID ${noradId} (format: ${format})`);
-		return new Response("Failed to retrieve orbital data. Upstream may be unavailable.", { status: 503 });
+		return new Response("Failed to retrieve orbital data. Upstream may be unavailable.", {
+			status: 503,
+			headers: { "Content-Type": "text/plain" },
+		});
 	}
 }
 

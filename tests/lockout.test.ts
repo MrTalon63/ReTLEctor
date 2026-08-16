@@ -25,6 +25,14 @@ describe("Celestrak Lockout", () => {
 		expect(status.untilIso).toBeDefined();
 	});
 
+	test("triggerCelestrakLockout does not set lockout key when status is 404", async () => {
+		const result = await triggerCelestrakLockout(404, "test 404 context");
+		expect(result).toBeNull();
+
+		const status = await isCelestrakLockedOut();
+		expect(status.locked).toBe(false);
+	});
+
 	test("isCelestrakLockedOut clears expired lockout key", async () => {
 		const expiredTime = Date.now() - 1000;
 		await kv.set(LOCKOUT_KEY, expiredTime);

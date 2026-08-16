@@ -5,7 +5,8 @@ import { parseOmmCsv } from "../src/utils/omm";
 
 const SAMPLE_CSV = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
 "ISS (ZARYA)","1998-067A","2026-08-15T12:00:00.000000",15.49812345,0.0001234,51.6432,123.4567,234.5678,345.6789,0,"U",25544,999,50000,0.00012345,0.00001234,0
-"TIANGONG","2021-035A","2026-08-15T12:00:00.000000",15.61234567,0.0002345,41.4721,210.1234,180.5432,190.1234,0,"U",48274,888,25000,0.00023456,0.00002345,0`;
+"TIANGONG","2021-035A","2026-08-15T12:00:00.000000",15.61234567,0.0002345,41.4721,210.1234,180.5432,190.1234,0,"U",48274,888,25000,0.00023456,0.00002345,0
+"STARLINK-ALPHA","2026-999A","2026-08-15T12:00:00.000000",15.01234567,0.0001111,53.0000,10.0000,20.0000,30.0000,0,"U",100123,777,1000,0.00010000,0.00001000,0`;
 
 describe("Multi-format NORAD ID lookups", () => {
 	beforeAll(async () => {
@@ -70,8 +71,27 @@ describe("Multi-format NORAD ID lookups", () => {
 
 	test("handleNoradRequest supports Alpha-5 NORAD IDs", async () => {
 		const respAlpha = await handleNoradRequest("A0123", "tle");
-		// A0123 is decoded to 100123 (which won't be in active group mock, so it returns 404/503 not 400 invalid ID)
-		expect(respAlpha.status).not.toBe(400);
+		expect(respAlpha.status).toBe(200);
+		expect(respAlpha.headers.get("Content-Type")).toBe("text/plain");
+		const text = await respAlpha.text();
+		expect(text).toContain("1 A0123U");
+	});
+
+	test("handleNoradRequest returns 404 and does not engage lockout when upstream returns 404", async () => {
+		const { isCelestrakLockedOut } = await import("../src/utils/lockout");
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => new Response("Not Found", { status: 404, statusText: "Not Found" })) as any;
+		try {
+			const resp = await handleNoradRequest("99999", "csv");
+			expect(resp.status).toBe(404);
+			const text = await resp.text();
+			expect(text).toContain("No orbital data found for NORAD ID 99999.");
+
+			const lockout = await isCelestrakLockedOut();
+			expect(lockout.locked).toBe(false);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	test("normalizeOrbitFormat defaults to csv and aliases 3le to tle", () => {

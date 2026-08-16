@@ -80,9 +80,18 @@ async function handleGroupRequest(rawGroup: string, lastFetchedHeader: number, f
 		try {
 			tle = await tleFetcher(group, format, queryType);
 			timestamp = (await kv.get(`${group}_timestamp_csv`)) as number | null;
-		} catch (err) {
+		} catch (err: any) {
+			if (err?.statusCode === 404 || (err instanceof Error && err.message.includes("404"))) {
+				return new Response(`Group "${group}" not found.`, {
+					status: 404,
+					headers: { "Content-Type": "text/plain" },
+				});
+			}
 			log.error({ err }, `Failed to fetch group "${group}" format "${format}" from upstream with no cached data.`);
-			return new Response(`Failed to fetch data for group "${group}". Upstream Celestrak may be unavailable.`, { status: 503 });
+			return new Response(`Failed to fetch data for group "${group}". Upstream Celestrak may be unavailable.`, {
+				status: 503,
+				headers: { "Content-Type": "text/plain" },
+			});
 		}
 	} else if (isStale) {
 		log.debug(`Orbital data for group "${group}", format "${format}" is stale. Fetching fresh data...`);

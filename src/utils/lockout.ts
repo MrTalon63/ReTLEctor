@@ -33,7 +33,11 @@ export async function isCelestrakLockedOut(): Promise<{ locked: boolean; untilIs
 	return { locked: false };
 }
 
-export async function triggerCelestrakLockout(status: number, context: string): Promise<number> {
+export async function triggerCelestrakLockout(status: number, context: string): Promise<number | null> {
+	if (status === 404) {
+		log.debug(`Celestrak returned HTTP 404 during ${context}. Skipping lockout.`);
+		return null;
+	}
 	const lockoutUntil = Date.now() + config.celestrakLockDuration;
 	await kv.set(LOCKOUT_KEY, lockoutUntil);
 	const isoStr = new Date(lockoutUntil).toISOString();

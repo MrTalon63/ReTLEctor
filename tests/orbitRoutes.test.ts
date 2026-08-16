@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeAll } from "bun:test";
 import orbitRoute from "../src/routes/orbit";
 import kv from "../src/utils/kv";
 import { parseOmmCsv, csvToJson, csvTo3le, csvToKvn } from "../src/utils/omm";
@@ -8,7 +8,7 @@ const SAMPLE_CSV = `OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINA
 "TIANGONG","2021-035A","2026-08-15T12:00:00.000000",15.61234567,0.0002345,41.4721,210.1234,180.5432,190.1234,0,"U",48274,888,25000,0.00023456,0.00002345,0`;
 
 describe("Unified orbit router (/:group/:format & /:noradId/:format)", () => {
-	beforeEach(async () => {
+	beforeAll(async () => {
 		const now = Date.now();
 		await kv.set("active_csv", SAMPLE_CSV);
 		await kv.set("active_json", csvToJson(SAMPLE_CSV));
@@ -18,7 +18,7 @@ describe("Unified orbit router (/:group/:format & /:noradId/:format)", () => {
 		await kv.set("active_timestamp_json", now);
 		await kv.set("active_timestamp_tle", now);
 		await kv.set("active_timestamp_kvn", now);
-	});
+	}, 15000);
 
 	describe("Group Routes", () => {
 		test("GET /active defaults to CSV format", async () => {

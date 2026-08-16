@@ -70,6 +70,13 @@ async function fetchTle(group: string, format: OrbitFormat = "tle", queryType: s
 			throw new Error(`Got 304 but no cached data for group "${group}"`);
 		}
 
+		if (response.status === 404) {
+			log.warn(`Celestrak returned 404 Not Found for group "${group}".`);
+			const notFoundError = new Error(`Group "${group}" not found on upstream Celestrak (404)`);
+			(notFoundError as any).statusCode = 404;
+			throw notFoundError;
+		}
+
 		const csvData = await response.text();
 
 		if (isNotModifiedNotice(csvData)) {
@@ -77,7 +84,7 @@ async function fetchTle(group: string, format: OrbitFormat = "tle", queryType: s
 				`Celestrak reported orbital data for group "${group}" has not updated (HTTP ${response.status}). Refreshing cache timestamp and serving cached data.`,
 			);
 			await kv.set(`${group}_timestamp_${upstreamFormat}`, Date.now());
-			if (!response.ok) {
+			if (!response.ok && response.status !== 404) {
 				await triggerCelestrakLockout(response.status, `group "${group}" (403/429 not-modified notice)`);
 			}
 			if (cachedCsv) {
@@ -137,6 +144,9 @@ async function fetchTle(group: string, format: OrbitFormat = "tle", queryType: s
 
 		return deriveFormat(csvData, format);
 	} catch (error) {
+		if ((error as any)?.statusCode === 404 || (error instanceof Error && error.message.includes("(404)"))) {
+			throw error;
+		}
 		if (cachedCsv && error instanceof Error && error.message.includes("lockout engaged")) {
 			return deriveFormat(cachedCsv, format);
 		}
